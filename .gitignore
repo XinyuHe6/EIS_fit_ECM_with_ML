@@ -5,3 +5,7 @@ logs
 *.log
 Regression_models*
 Classification_models
+.csv
+# Ignore dataset specific models
+D1_dataset
+Lab_dataset

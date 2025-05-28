@@ -35,13 +35,14 @@ new_x = np.zeros(new_shape)
 new_x[:, :, :3] = x
 
 #### scale parameter values ###
-y[:,0]=y[:,0]*10**13 # L 10^13
-y[:,1]=y[:,1]*10 # R0 10
-y[:,2]=y[:,2]*10 # R1 10
-y[:,3]=y[:,3]*10 # R2 10
-y[:,4]=y[:,4]*10**2 # C1 10^2
-y[:,5]=y[:,5]*10**2 # C2 10^2
-y[:,6]=y[:,6]*10 # sigma(AW) 10
+# L, R0, R1, R2, C1, C2, sigma
+y[:,0]=y[:,0]*10**13 # L 
+y[:,1]=y[:,1]*10**3 # R0
+y[:,2]=y[:,2]*10**3 # R1
+y[:,3]=y[:,3]*10**3  # R2
+y[:,4]=y[:,4]*10**3 # C1
+y[:,5]=y[:,5]*10**3 # C2
+y[:,6]=y[:,6]*10**3 # sigma(AW)
 
 # Data Augmentation
 new_x[:,:,3]=x[:,:,0]*-1
@@ -56,7 +57,7 @@ x_train, x_test, y_train, y_test = train_test_split(new_x, y,
 
 ##### Model #####
 # Setup the Experiment 
-Experiment_name="RegC6gpu"
+Experiment_name="RegC6"
 fn_tmp=filename.split("xy_data_",1)[1].split(".",1)[0]
 Experiment_path="EIS_"+fn_tmp+"_model_"+Experiment_name
 
@@ -191,11 +192,11 @@ history = model.fit(
           verbose=2,
                    )
 
-model.save('RegC6gpu_alpha_BN.h5')
+model.save('RegC6_alpha_BN.h5')
 
 ##### Evaluation #####
 # Load EIS data-set
-filename="EISmat/xy_data_26k_regC6_v2_test.mat"
+filename="EISmat/xy_data_33k_regC6_v2_test.mat"
 
 x=scipy.io.loadmat(filename)["x_data"]
 y=scipy.io.loadmat(filename)["y_data"]
@@ -210,13 +211,13 @@ new_shape=tuple(new_shape)
 new_x = np.zeros(new_shape)
 new_x[:, :, :3] = x
 
-y[:,0]=y[:,0]*10**13 # L 10^13
-y[:,1]=y[:,1]*10 # R0 10
-y[:,2]=y[:,2]*10 # R1 10
-y[:,3]=y[:,3]*10 # R2 10
-y[:,4]=y[:,4]*10**2 # C1 10^2
-y[:,5]=y[:,5]*10**2 # C2 10^2
-y[:,6]=y[:,6]*10 # sigma(AW) 10
+y[:,0]=y[:,0]*10**13 # L 
+y[:,1]=y[:,1]*10**3 # R0
+y[:,2]=y[:,2]*10**3 # R1
+y[:,3]=y[:,3]*10**3  # R2
+y[:,4]=y[:,4]*10**3 # C1
+y[:,5]=y[:,5]*10**3 # C2
+y[:,6]=y[:,6]*10**3 # sigma(AW)
 
 
 new_x[:,:,3]=x[:,:,0]*-1
@@ -231,7 +232,7 @@ x_train, x_test, y_train, y_test = train_test_split(new_x, y,
 
 
 #Load Model
-model_to_load="RegC6gpu_alpha_BN.h5"
+model_to_load="RegC6_alpha_BN.h5"
 predict_model = tf.keras.models.load_model(model_to_load)
 
 from sklearn.metrics import r2_score

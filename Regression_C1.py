@@ -147,7 +147,7 @@ log_dir = "logs/fit/" + datetime.datetime.now().strftime("%y_%m_%d") + "/" \
                       + datetime.datetime.now().strftime("_%m%d%H%M%S")
 
 tensorboard_callback = tf.keras.callbacks.TensorBoard(
-                                          log_dir=log_dir,
+                                          log_dir=log_train_test_splitdir,
                                           histogram_freq=0,
                                           profile_batch=0)
 

@@ -1,14 +1,15 @@
 #!/bin/bash
 
-#SBATCH --account=sunwbgt0
-#SBATCH --job-name=test
+#SBATCH --account=jhjin1
+#SBATCH --job-name=Classification_gpu
 #SBATCH --mail-user=lhalice@umich.edu
 #SBATCH --mail-type=BEGIN,END,FAIL
 #SBATCH --nodes=1
-#SBATCH --partition=standard
-#SBATCH --mem=50GB
-#SBATCH --cpus-per-task=32
-#SBATCH --time=24:00:00
-#SBATCH --output=/home/lhalice/EIS_fit_ECM_with_ML/out-new.log
+#SBATCH --partition=gpu
+#SBATCH --gpus=1
+#SBATCH --mem-per-gpu=16GB
+#SBATCH --time=12:00:00
+#SBATCH --output=/home/lhalice/EIS_fit_ECM_with_ML/out-testgpu.log
+
 
 python Classification_ECM.py 

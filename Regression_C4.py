@@ -33,12 +33,20 @@ new_shape[-1]=new_shape[-1]+3
 new_shape=tuple(new_shape)
 new_x = np.zeros(new_shape)
 new_x[:, :, :3] = x
-y[:,3]=y[:,3]*10**4
-y[:,4]=y[:,4]*10**7
-y[:,5]=y[:,5]*10**4
-y[:,6]=y[:,6]*10**7
 
-y = np.delete(y, [3,5], axis=1)
+# R0,R1,R2,ideality_factor1,Q1,ideality_factor2,Q2,sigma
+
+y[:,0]=y[:,0]*10**3 # R0
+y[:,1]=y[:,0]*10**3 # R1
+y[:,2]=y[:,0]*10**3 # R2
+y[:,3]=y[:,3] # ideal1
+y[:,4]=y[:,4]*10**3 # Q1
+y[:,5]=y[:,5] # ideal2
+y[:,6]=y[:,6]*10**3 # Q2
+y[:,7]=y[:,7]*10**3 # sigma
+
+
+# y = np.delete(y, [3,5], axis=1)
 
 # Data Augmentation
 new_x[:,:,3]=x[:,:,0]*-1
@@ -121,9 +129,9 @@ def make_model(input_shape):
                                )(dense1)
                                     
 #------------------------------------------------------------------------------
-    # output_layer1 = keras.layers.Dense(6)(dense1)
+    output_layer1 = keras.layers.Dense(8)(dense1)
     # add non-negative constraint
-    output_layer1 = keras.layers.Dense(6, activation='softplus')(dense1)
+    # output_layer1 = keras.layers.Dense(8, activation='softplus')(dense1)
 
 
     return keras.models.Model(inputs=input_layer, outputs=output_layer1)
@@ -192,7 +200,7 @@ model.save('RegC4_alpha_BN.h5')
 
 ##### Evaluation #####
 # Load EIS data-set
-filename="EISmat/xy_data_26k_regC4_v2_test.mat"
+filename="EISmat/xy_data_33k_regC4_v2_test.mat"
 
 x=scipy.io.loadmat(filename)["x_data"]
 y=scipy.io.loadmat(filename)["y_data"]
@@ -207,11 +215,15 @@ new_shape=tuple(new_shape)
 new_x = np.zeros(new_shape)
 new_x[:, :, :3] = x
 
-y[:,4]=y[:,4]*10**6
 
-y[:,6]=y[:,6]*10**6
-
-y = np.delete(y, [3,5], axis=1)
+y[:,0]=y[:,0]*10**3 # R0
+y[:,1]=y[:,0]*10**3 # R1
+y[:,2]=y[:,0]*10**3 # R2
+y[:,3]=y[:,3] # ideal1
+y[:,4]=y[:,4]*10**3 # Q1
+y[:,5]=y[:,5] # ideal2
+y[:,6]=y[:,6]*10**3 # Q2
+y[:,7]=y[:,7]*10**3 # sigma
 
 
 new_x[:,:,3]=x[:,:,0]*-1
@@ -240,17 +252,17 @@ plt.rcParams["axes.labelweight"] = "bold"
 a=y_test[0:99,0]
 b=y_pred[0:99,0]
 plt.figure(figsize=(4, 2.8), dpi=300)
-plt.title("Rs")
+plt.title("R0")
 plt.plot(a,"*",ms=3,markeredgecolor='red')
 plt.plot(b,'o', markerfacecolor='none',ms=6, markeredgecolor='black')
 # plt.ylim(0,300)
 # plt.xlim(0,300)
 # plt.show()
-plt.savefig(Experiment_path+"/"+"Rs.png")
-print("R2 score of Rs:", r2_score(a,b))
-print("MAE of Rs:", mean_absolute_error(a,b))
-print("MAPE of Rs:", str(mean_absolute_percentage_error(a,b)*100)+" %")
-print("MSE of Rs:", mean_squared_error(a,b))
+plt.savefig(Experiment_path+"/"+"R0.png")
+print("R2 score of R0:", r2_score(a,b))
+print("MAE of R0:", mean_absolute_error(a,b))
+print("MAPE of R0:", str(mean_absolute_percentage_error(a,b)*100)+" %")
+print("MSE of R0:", mean_squared_error(a,b))
 
 a=y_test[0:99,1]
 b=y_pred[0:99,1]
@@ -285,6 +297,22 @@ print("MSE of R2:", mean_squared_error(a,b))
 a=y_test[0:99,3]
 b=y_pred[0:99,3]
 plt.figure(figsize=(4, 2.8), dpi=300)
+plt.title("ideal_factor1")
+plt.plot(a,"*",ms=3,markeredgecolor='red')
+plt.plot(b,'o', markerfacecolor='none',ms=6, markeredgecolor='black')
+# plt.ylim(0,300)
+# plt.xlim(0,300)
+# plt.show()
+plt.savefig(Experiment_path+"/"+"ideal_factor1.png")
+print("R2 score of ideal_factor1:", r2_score(a,b))
+print("MAE of ideal_factor1:", mean_absolute_error(a,b))
+print("MAPE of ideal_factor1:", str(mean_absolute_percentage_error(a,b)*100)+" %")
+print("MSE of ideal_factor1:", mean_squared_error(a,b))
+
+
+a=y_test[0:99,4]
+b=y_pred[0:99,4]
+plt.figure(figsize=(4, 2.8), dpi=300)
 plt.title("Q1")
 plt.plot(a,"*",ms=3,markeredgecolor='red')
 plt.plot(b,'o', markerfacecolor='none',ms=6, markeredgecolor='black')
@@ -297,8 +325,24 @@ print("MAE of Q1:", mean_absolute_error(a,b))
 print("MAPE of Q1:", str(mean_absolute_percentage_error(a,b)*100)+" %")
 print("MSE of Q1:", mean_squared_error(a,b))
 
-a=y_test[0:99,4]
-b=y_pred[0:99,4]
+
+a=y_test[0:99,5]
+b=y_pred[0:99,5]
+plt.figure(figsize=(4, 2.8), dpi=300)
+plt.title("ideal_factor2")
+plt.plot(a,"*",ms=3,markeredgecolor='red')
+plt.plot(b,'o', markerfacecolor='none',ms=6, markeredgecolor='black')
+# plt.ylim(0,300)
+# plt.xlim(0,300)
+# plt.show()
+plt.savefig(Experiment_path+"/"+"ideal_factor2.png")
+print("R2 score of ideal_factor2:", r2_score(a,b))
+print("MAE of ideal_factor2:", mean_absolute_error(a,b))
+print("MAPE of ideal_factor2:", str(mean_absolute_percentage_error(a,b)*100)+" %")
+print("MSE of ideal_factor2:", mean_squared_error(a,b))
+
+a=y_test[0:99,6]
+b=y_pred[0:99,6]
 plt.figure(figsize=(4, 2.8), dpi=300)
 plt.title("Q2")
 plt.plot(a,"*",ms=3,markeredgecolor='red')
@@ -312,8 +356,8 @@ print("MAE of Q2:", mean_absolute_error(a,b))
 print("MAPE of Q2:", str(mean_absolute_percentage_error(a,b)*100)+" %")
 print("MSE of Q2:", mean_squared_error(a,b))
 
-a=y_test[0:99,5]
-b=y_pred[0:99,5]
+a=y_test[0:99,7]
+b=y_pred[0:99,7]
 plt.figure(figsize=(4, 2.8), dpi=300)
 plt.title("Sigma")
 plt.plot(a,"*",ms=3,markeredgecolor='red')

@@ -439,31 +439,43 @@ def sim_cir5():
 
     return Zsum,np.array(Zparam)
 
-def sim_cir6(size_number=131072, number_of_point=60):
+def sim_cir6():
     """ Simulate circuit 6: L + R0 + (R1 || C1) + ( (R2 + Z ) || C2)"""
-    angular_frequency = F_range(0.02,20000,number_of_point)[0]
+    # angular_frequency = F_range(0.02,20000,number_of_point)[0]
 
-    L = nor_rand(mu=3.4e-13, size_number=size_number)
+    # L = nor_rand(mu=3.4e-13, size_number=size_number)
+    L = log_rand(l_range[0],l_range[1],size_number)
     ZL = genZL(size_number, number_of_point, L)
 
-    R0 = nor_rand(mu=0.4, size_number=size_number)
+    # R0 = nor_rand(mu=0.4, size_number=size_number)
+    # R0 = log_rand(0.005, 0.05,size_number)
+    R0 = log_rand(resistance_range[0],resistance_range[1],size_number)
     ZR0 = genZR(size_number,number_of_point,R0)
 
-    R1 = nor_rand(mu=0.85, size_number=size_number)
+    # R1 = nor_rand(mu=0.85, size_number=size_number)
+    # R1 = log_rand(0.01, 0.5,size_number)
+    R1 = log_rand(resistance_range[0],resistance_range[1],size_number)
     ZR1 = genZR(size_number,number_of_point,R1)
 
-    R2 = nor_rand(mu=0.5, size_number=size_number)
+    # R2 = nor_rand(mu=0.5, size_number=size_number)
+    # R2 = log_rand(0.005, 0.5,size_number)
+    R2 = log_rand(resistance_range[0],resistance_range[1],size_number)
     ZR2 = genZR(size_number,number_of_point,R2)
 
     ideality_factor= np.ones(size_number)
-    C1 = nor_rand(mu=0.04, size_number=size_number)
+    # C1 = nor_rand(mu=0.04, size_number=size_number)
+    # C1 = log_rand(0.001, 0.05,size_number)
+    C1 = log_rand(q_range[0],q_range[1],size_number)
     ZC1= genZQ(size_number,number_of_point, C1,ideality_factor,angular_frequency)
 
     ideality_factor= np.ones(size_number)
-    C2 = nor_rand(mu=0.0015, size_number=size_number)
+    # C2 = nor_rand(mu=0.0015, size_number=size_number)
+    # C2 = log_rand(0.001, 0.5,size_number)
+    C2 = log_rand(q_range[0],q_range[1],size_number)
     ZC2= genZQ(size_number,number_of_point, C2,ideality_factor,angular_frequency)
 
-    sigma = nor_rand(mu=0.13, size_number=size_number)
+    # sigma = nor_rand(mu=0.13, size_number=size_number)
+    sigma = log_rand(sigma_range[0],sigma_range[1],size_number)
     ZW=genZW(size_number,number_of_point,sigma,angular_frequency)
 
     Zsum= ZL + ZR0 + 1 / ( 1 / ZR1 + 1 / ZC1 ) + 1 / ( 1 / ZC2 + 1 / ( ZR2 + ZW ) )
@@ -474,31 +486,41 @@ def sim_cir6(size_number=131072, number_of_point=60):
 
     return Zsum,np.array(Zparam)
 
-def sim_cir7(size_number=131072, number_of_point=60):
+def sim_cir7():
     """ Simulate circuit 7: L + R0 + (R1 || CPE1) + ( (R2 + Z ) || CPE2)"""
-    angular_frequency = F_range(0.02,20000,number_of_point)[0]
+    # angular_frequency = F_range(0.02,20000,number_of_point)[0]
 
-    L = nor_rand(mu=3.4e-13, size_number=size_number)
+    # L = nor_rand(mu=3.4e-13, size_number=size_number)
+    L = log_rand(l_range[0],l_range[1],size_number)
     ZL = genZL(size_number, number_of_point, L)
 
-    R0 = nor_rand(mu=0.4, size_number=size_number)
+    # R0 = nor_rand(mu=0.4, size_number=size_number)
+    # R0 = log_rand(0.005, 0.05,size_number)
+    R0 = log_rand(resistance_range[0],resistance_range[1],size_number)
     ZR0 = genZR(size_number,number_of_point,R0)
 
-    R1 = nor_rand(mu=0.85, size_number=size_number)
+    # R1 = nor_rand(mu=0.85, size_number=size_number)
+    # R1 = log_rand(0.01, 0.5,size_number)
+    R1 = log_rand(resistance_range[0],resistance_range[1],size_number)
     ZR1 = genZR(size_number,number_of_point,R1)
 
-    R2 = nor_rand(mu=0.5, size_number=size_number)
+    # R2 = nor_rand(mu=0.5, size_number=size_number)
+    # R2 = log_rand(0.005, 0.5,size_number)
+    R2 = log_rand(resistance_range[0],resistance_range[1],size_number)
     ZR2 = genZR(size_number,number_of_point,R2)
 
     ideality_factor1=np.round(lin_rand(alpha_range[0],alpha_range[1],size_number),3)
-    Q1=log_rand(q_range[0],q_range[1],size_number)
+    # Q1= log_rand(0.001, 0.05,size_number)
+    Q1= log_rand(q_range[0],q_range[1],size_number)
     ZQ1= genZQ(size_number,number_of_point,Q1,ideality_factor1,angular_frequency)
 
     ideality_factor2=np.round(lin_rand(alpha_range[0],alpha_range[1],size_number),3)
-    Q2=log_rand(q_range[0],q_range[1],size_number)
+    # Q2= log_rand(0.001, 0.5,size_number)
+    Q2= log_rand(q_range[0],q_range[1],size_number)
     ZQ2= genZQ(size_number,number_of_point,Q2,ideality_factor2,angular_frequency)
 
-    sigma = nor_rand(mu=0.13, size_number=size_number)
+    # sigma = nor_rand(mu=0.13, size_number=size_number)
+    sigma = log_rand(sigma_range[0],sigma_range[1],size_number)
     ZW=genZW(size_number,number_of_point,sigma,angular_frequency)
 
     Zsum= ZL + ZR0 + 1 / ( 1 / ZR1 + 1 / ZQ1 ) + 1 / ( 1 / ZQ2 + 1 / ( ZR2 + ZW ) )
@@ -511,23 +533,28 @@ def sim_cir7(size_number=131072, number_of_point=60):
 
 
 ###### Initialize Parameters ######
-
+np.random.seed(1)
 #Number of circuit:
-number_of_circuit=7    
+number_of_circuit= 7    
 #Number of spectrum in each circuit : 256 512 1024 2048 4096 8192 16384 32768 (131072)
-size_number=131072
+size_number= 32768
 #Numer of data point in each spectrum:
-number_of_point=60  
+number_of_point= 50  
 #Range of frequency:
-angular_frequency=F_range(0.02,20000,number_of_point)[0] 
+angular_frequency=F_range(0.1,10000,number_of_point)[0] 
 #Range of resistance:
-resistance_range=[10**-1,10**4] 
+# resistance_range=[10**-1,10**4] 
+resistance_range=[10**-3,1] 
 #Range of idality factor of CPE:
 alpha_range=[0.8,1]
 #Range of CPE capacitance:
-q_range=[10**-5,10**-3]
+# q_range=[10**-5,10**-3]
+q_range=[10**-3,1]
 #Range of sigma:
-sigma_range=[10**0,10**3]
+# sigma_range=[10**0,10**3]
+sigma_range=[10**-3,10**-1]
+l_range=[10**-14,10**-11]
+
 
 Circuit_spec=np.zeros((number_of_circuit,size_number,number_of_point), dtype=complex)
 

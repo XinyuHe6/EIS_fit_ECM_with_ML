@@ -35,15 +35,16 @@ new_x = np.zeros(new_shape)
 new_x[:, :, :3] = x
 
 #### scale parameter values ###
+# L, R0, R1, R2, Q1, Q2, ideality_factor1, ideality_factor2, sigma
 y[:,0]=y[:,0]*10**13 # L 10^13
-y[:,1]=y[:,1]*10 # R0 10
-y[:,2]=y[:,2]*10 # R1 10
-y[:,3]=y[:,3]*10 # R2 10
-y[:,4]=y[:,4]*10**2 # CPE1 10^2
-y[:,5]=y[:,5]*10**2 # CPE2 10^2
+y[:,1]=y[:,1]*10**3 # R0
+y[:,2]=y[:,2]*10**3 # R1
+y[:,3]=y[:,3]*10**3 # R2
+y[:,4]=y[:,4]*10**3 # CPE1
+y[:,5]=y[:,5]*10**3 # CPE2
 y[:,6]=y[:,6] # ideal factor for CPE1
 y[:,7]=y[:,7] # ideal factor for CPE1
-y[:,8]=y[:,8]*10 # sigma(AW) 10
+y[:,8]=y[:,8]*10**3 # sigma(AW)
 
 # Data Augmentation
 new_x[:,:,3]=x[:,:,0]*-1
@@ -58,7 +59,7 @@ x_train, x_test, y_train, y_test = train_test_split(new_x, y,
 
 ##### Model #####
 # Setup the Experiment 
-Experiment_name="RegC7gpu"
+Experiment_name="RegC7"
 fn_tmp=filename.split("xy_data_",1)[1].split(".",1)[0]
 Experiment_path="EIS_"+fn_tmp+"_model_"+Experiment_name
 
@@ -193,17 +194,16 @@ history = model.fit(
           verbose=2,
                    )
 
-model.save('RegC7gpu_alpha_BN.h5')
+model.save('RegC7_alpha_BN.h5')
 
 ##### Evaluation #####
 # Load EIS data-set
-filename="EISmat/xy_data_26k_regC7_v2_test.mat"
+filename="EISmat/xy_data_33k_regC7_v2_test.mat"
 
 x=scipy.io.loadmat(filename)["x_data"]
 y=scipy.io.loadmat(filename)["y_data"]
 y=np.squeeze(y)
 x=np.swapaxes(x, 1, 2)
-
 
 new_shape=x.shape
 new_shape=np. asarray(new_shape)
@@ -213,20 +213,18 @@ new_x = np.zeros(new_shape)
 new_x[:, :, :3] = x
 
 y[:,0]=y[:,0]*10**13 # L 10^13
-y[:,1]=y[:,1]*10 # R0 10
-y[:,2]=y[:,2]*10 # R1 10
-y[:,3]=y[:,3]*10 # R2 10
-y[:,4]=y[:,4]*10**2 # C1 10^2
-y[:,5]=y[:,5]*10**2 # C2 10^2
+y[:,1]=y[:,1]*10**3 # R0
+y[:,2]=y[:,2]*10**3 # R1
+y[:,3]=y[:,3]*10**3 # R2
+y[:,4]=y[:,4]*10**3 # CPE1
+y[:,5]=y[:,5]*10**3 # CPE2
 y[:,6]=y[:,6] # ideal factor for CPE1
 y[:,7]=y[:,7] # ideal factor for CPE1
-y[:,8]=y[:,8]*10 # sigma(AW) 10
-
+y[:,8]=y[:,8]*10**3 # sigma(AW)
 
 new_x[:,:,3]=x[:,:,0]*-1
 new_x[:,:,4]=x[:,:,1]*-1
 new_x[:,:,5]=x[:,:,2]*-1
-
 
 #split data
 x_train, x_test, y_train, y_test = train_test_split(new_x, y, 
@@ -235,7 +233,7 @@ x_train, x_test, y_train, y_test = train_test_split(new_x, y,
 
 
 #Load Model
-model_to_load="RegC7gpu_alpha_BN.h5"
+model_to_load="RegC7_alpha_BN.h5"
 predict_model = tf.keras.models.load_model(model_to_load)
 
 from sklearn.metrics import r2_score
