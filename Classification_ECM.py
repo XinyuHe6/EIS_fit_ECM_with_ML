@@ -224,7 +224,7 @@ disp = ConfusionMatrixDisplay(confusion_matrix=cm,
                               display_labels=["C1","C2"
                               ,"C3","C4","C5", "C6", "C7"])
 px = 1/plt.rcParams["figure.dpi"]  # pixel in inches
-fig, ax = plt.subplots(figsize=(400*px, 400*px))
+fig, ax = plt.subplots(figsize=(600*px, 600*px),dpi=300)
 disp.plot(cmap="summer",ax=ax)
 cfmc_title="Accuracy :"+str(m_ev[1]*100)+"%"+"\n"+"Loss :"+str(m_ev[0])
 plt.title(cfmc_title)

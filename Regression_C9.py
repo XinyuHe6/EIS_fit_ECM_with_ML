@@ -19,7 +19,7 @@ from tensorflow.keras.utils import plot_model
 from sklearn.metrics import confusion_matrix, ConfusionMatrixDisplay
 
 # Load EIS data-set
-filename="EISmat/xy_data_131k_regC4_v2.mat"
+filename="G1_xy_data_131k_regC9_v2.mat"
 
 x=scipy.io.loadmat(filename)["x_data"]
 y=scipy.io.loadmat(filename)["y_data"]
@@ -34,19 +34,19 @@ new_shape=tuple(new_shape)
 new_x = np.zeros(new_shape)
 new_x[:, :, :3] = x
 
-# R0,R1,R2,ideality_factor1,Q1,ideality_factor2,Q2,sigma
+# R0,R1,R2,R3,C1,C2,C3,sigma
 
 y[:,0]=y[:,0]*10**3 # R0
 y[:,1]=y[:,1]*10**3 # R1
 y[:,2]=y[:,2]*10**3 # R2
-y[:,3]=y[:,3] # ideal1
-y[:,4]=y[:,4]*10**3 # Q1
-y[:,5]=y[:,5] # ideal2
-y[:,6]=y[:,6]*10**3 # Q2
+y[:,3]=y[:,3]*10**3 # R3
+
+y[:,4]=y[:,4]*10**3 # C1
+y[:,5]=y[:,5]*10**3 # C2
+y[:,6]=y[:,6]*10**3 # C3
+
 y[:,7]=y[:,7]*10**3 # sigma
 
-
-# y = np.delete(y, [3,5], axis=1)
 
 # Data Augmentation
 new_x[:,:,3]=x[:,:,0]*-1
@@ -61,7 +61,7 @@ x_train, x_test, y_train, y_test = train_test_split(new_x, y,
 
 ##### Model #####
 # Setup the Experiment 
-Experiment_name="RegC4"
+Experiment_name="G1_RegC9"
 fn_tmp=filename.split("xy_data_",1)[1].split(".",1)[0]
 Experiment_path="EIS_"+fn_tmp+"_model_"+Experiment_name
 
@@ -131,7 +131,7 @@ def make_model(input_shape):
 #------------------------------------------------------------------------------
     output_layer1 = keras.layers.Dense(8)(dense1)
     # add non-negative constraint
-    # output_layer1 = keras.layers.Dense(8, activation='softplus')(dense1)
+    # output_layer1 = keras.layers.Dense(6, activation='softplus')(dense1)
 
 
     return keras.models.Model(inputs=input_layer, outputs=output_layer1)
@@ -196,11 +196,11 @@ history = model.fit(
           verbose=2,
                    )
 
-model.save('RegC4_alpha_BN.h5')
+model.save('G1_RegC9_alpha_BN.h5')
 
 ##### Evaluation #####
 # Load EIS data-set
-filename="EISmat/xy_data_33k_regC4_v2_test.mat"
+filename="G1_xy_data_33k_regC9_v2_test.mat"
 
 x=scipy.io.loadmat(filename)["x_data"]
 y=scipy.io.loadmat(filename)["y_data"]
@@ -219,10 +219,10 @@ new_x[:, :, :3] = x
 y[:,0]=y[:,0]*10**3 # R0
 y[:,1]=y[:,1]*10**3 # R1
 y[:,2]=y[:,2]*10**3 # R2
-y[:,3]=y[:,3] # ideal1
-y[:,4]=y[:,4]*10**3 # Q1
-y[:,5]=y[:,5] # ideal2
-y[:,6]=y[:,6]*10**3 # Q2
+y[:,3]=y[:,3]*10**3 # R3
+y[:,4]=y[:,4]*10**3 # C1
+y[:,5]=y[:,5]*10**3 # C2
+y[:,6]=y[:,6]*10**3 # C3
 y[:,7]=y[:,7]*10**3 # sigma
 
 
@@ -237,7 +237,7 @@ x_train, x_test, y_train, y_test = train_test_split(new_x, y,
                                                     random_state=42)
 
 #Load Model
-model_to_load="RegC4_alpha_BN.h5"
+model_to_load="G1_RegC9_alpha_BN.h5"
 predict_model = tf.keras.models.load_model(model_to_load)
 
 from sklearn.metrics import r2_score
@@ -297,64 +297,64 @@ print("MSE of R2:", mean_squared_error(a,b))
 a=y_test[0:99,3]
 b=y_pred[0:99,3]
 plt.figure(figsize=(4, 2.8), dpi=300)
-plt.title("ideal_factor1")
+plt.title("R3")
 plt.plot(a,"*",ms=3,markeredgecolor='red')
 plt.plot(b,'o', markerfacecolor='none',ms=6, markeredgecolor='black')
 # plt.ylim(0,300)
 # plt.xlim(0,300)
 # plt.show()
-plt.savefig(Experiment_path+"/"+"ideal_factor1.png")
-print("R2 score of ideal_factor1:", r2_score(a,b))
-print("MAE of ideal_factor1:", mean_absolute_error(a,b))
-print("MAPE of ideal_factor1:", str(mean_absolute_percentage_error(a,b)*100)+" %")
-print("MSE of ideal_factor1:", mean_squared_error(a,b))
-
+plt.savefig(Experiment_path+"/"+"R3.png")
+print("R2 score of R3:", r2_score(a,b))
+print("MAE of R3:", mean_absolute_error(a,b))
+print("MAPE of R3:", str(mean_absolute_percentage_error(a,b)*100)+" %")
+print("MSE of R3:", mean_squared_error(a,b))
 
 a=y_test[0:99,4]
 b=y_pred[0:99,4]
 plt.figure(figsize=(4, 2.8), dpi=300)
-plt.title("Q1")
+plt.title("C1")
 plt.plot(a,"*",ms=3,markeredgecolor='red')
 plt.plot(b,'o', markerfacecolor='none',ms=6, markeredgecolor='black')
 # plt.ylim(0,300)
 # plt.xlim(0,300)
 # plt.show()
-plt.savefig(Experiment_path+"/"+"Q1.png")
-print("R2 score of Q1:", r2_score(a,b))
-print("MAE of Q1:", mean_absolute_error(a,b))
-print("MAPE of Q1:", str(mean_absolute_percentage_error(a,b)*100)+" %")
-print("MSE of Q1:", mean_squared_error(a,b))
+plt.savefig(Experiment_path+"/"+"C1.png")
+print("R2 score of C1:", r2_score(a,b))
+print("MAE of C1:", mean_absolute_error(a,b))
+print("MAPE of C1:", str(mean_absolute_percentage_error(a,b)*100)+" %")
+print("MSE of C1:", mean_squared_error(a,b))
 
 
 a=y_test[0:99,5]
 b=y_pred[0:99,5]
 plt.figure(figsize=(4, 2.8), dpi=300)
-plt.title("ideal_factor2")
+plt.title("C2")
 plt.plot(a,"*",ms=3,markeredgecolor='red')
 plt.plot(b,'o', markerfacecolor='none',ms=6, markeredgecolor='black')
 # plt.ylim(0,300)
 # plt.xlim(0,300)
 # plt.show()
-plt.savefig(Experiment_path+"/"+"ideal_factor2.png")
-print("R2 score of ideal_factor2:", r2_score(a,b))
-print("MAE of ideal_factor2:", mean_absolute_error(a,b))
-print("MAPE of ideal_factor2:", str(mean_absolute_percentage_error(a,b)*100)+" %")
-print("MSE of ideal_factor2:", mean_squared_error(a,b))
+plt.savefig(Experiment_path+"/"+"C2.png")
+print("R2 score of C2:", r2_score(a,b))
+print("MAE of C2:", mean_absolute_error(a,b))
+print("MAPE of C2:", str(mean_absolute_percentage_error(a,b)*100)+" %")
+print("MSE of C2:", mean_squared_error(a,b))
 
 a=y_test[0:99,6]
 b=y_pred[0:99,6]
 plt.figure(figsize=(4, 2.8), dpi=300)
-plt.title("Q2")
+plt.title("C3")
 plt.plot(a,"*",ms=3,markeredgecolor='red')
 plt.plot(b,'o', markerfacecolor='none',ms=6, markeredgecolor='black')
 # plt.ylim(0,300)
 # plt.xlim(0,300)
 # plt.show()
-plt.savefig(Experiment_path+"/"+"Q2.png")
-print("R2 score of Q2:", r2_score(a,b))
-print("MAE of Q2:", mean_absolute_error(a,b))
-print("MAPE of Q2:", str(mean_absolute_percentage_error(a,b)*100)+" %")
-print("MSE of Q2:", mean_squared_error(a,b))
+plt.savefig(Experiment_path+"/"+"C3.png")
+print("R2 score of C3:", r2_score(a,b))
+print("MAE of C3:", mean_absolute_error(a,b))
+print("MAPE of C3:", str(mean_absolute_percentage_error(a,b)*100)+" %")
+print("MSE of C3:", mean_squared_error(a,b))
+
 
 a=y_test[0:99,7]
 b=y_pred[0:99,7]

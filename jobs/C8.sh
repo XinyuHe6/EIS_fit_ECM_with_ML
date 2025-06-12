@@ -1,15 +1,14 @@
 #!/bin/bash
 
 #SBATCH --account=jhjin1
-#SBATCH --job-name=Classification_gpu
+#SBATCH --job-name=C8
 #SBATCH --mail-user=lhalice@umich.edu
 #SBATCH --mail-type=BEGIN,END,FAIL
 #SBATCH --nodes=1
 #SBATCH --partition=gpu
 #SBATCH --gpus=1
 #SBATCH --mem-per-gpu=16GB
-#SBATCH --time=4:00:00
-#SBATCH --output=/home/lhalice/EIS_fit_ECM_with_ML/out-testgpu.log
+#SBATCH --time=12:00:00
+#SBATCH --output=/home/lhalice/EIS_fit_ECM_with_ML/out-c8gpu.log
 
-
-python Classification_ECM.py 
+python Regression_C8.py 

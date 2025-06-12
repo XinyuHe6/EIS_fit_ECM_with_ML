@@ -36,7 +36,7 @@ if __name__ == "__main__":
     # df = pd.DataFrame(all_param)
     # df.transpose()
     # k=df.stack()
-    # k.to_csv('paramc1-c7.csv', index=False)
+    # k.to_csv('paramc1-c7_gRange.csv', index=False)
 
     # data_ver="v2"
     # if size_number >= 1000: data_num_n = str("%.0f%s" % (size_number/1000.0, 'k'))
@@ -49,6 +49,7 @@ if __name__ == "__main__":
     # x_data,y_data = export_data(Circuit_spec,size_number,number_of_point,numc=number_of_circuit)
     # mdic={"x_data":x_data,"y_data":y_data}
     # scipy.io.savemat(File_name, mdic)
+    # print("finished")
 
 
 
@@ -154,16 +155,21 @@ if __name__ == "__main__":
     # scipy.io.savemat(test_file_name, mdic)
 
 
-    # # For Regression Ci New (using another seed to generate test data)
-    
-    np.random.seed(1)
+    # For Regression Ci New (using another seed to generate test data)
+    np.random.seed(0)
     args = parse_args()
+    if args.is_Test:
+        np.random.seed(1)
     circuit_idx = args.circuit_model - 1  # Convert to zero-based index
     curcuit_label = args.circuit_model
 
-    params = [Circuit0_param, Circuit1_param, Circuit2_param, Circuit3_param, Circuit4_param, Circuit5_param, Circuit6_param]
-    param_csvs = ['paramc1.csv', 'paramc2.csv', 'paramc3.csv', 'paramc4.csv', 'paramc5.csv', 'paramc6.csv', 'paramc7.csv']
-    file_names = ["_regC1_", "_regC2_", "_regC3_", "_regC4_", "_regC5_", "_regC6_", "_regC7_"]
+    params = [Circuit0_param, Circuit1_param, Circuit2_param, Circuit3_param, Circuit4_param, Circuit5_param, Circuit6_param, Circuit7_param, Circuit8_param]
+    param_csvs = ['G1_paramc1.csv', 'G1_paramc2.csv', 'G1_paramc3.csv', 'G1_paramc4.csv', 'G1_paramc5.csv', 'G1_paramc6.csv', 'G1_paramc7.csv', 'G1_paramc8.csv', 'G1_paramc9.csv']
+    if args.is_Test:
+        param_csvs = [csv.replace('.csv', '_test.csv') for csv in param_csvs]
+    file_names = ["_regC1_", "_regC2_", "_regC3_", "_regC4_", "_regC5_", "_regC6_", "_regC7_", "_regC8_", "_regC9_"]
+
+
     data_ver = args.data_ver
     
     all_param = []
@@ -176,9 +182,9 @@ if __name__ == "__main__":
     if size_number >= 1000: data_num_n = str("%.0f%s" % (size_number/1000.0, 'k'))
     else : data_num_n = str(size_number)
 
-    File_name="xy_data_"+data_num_n+file_names[circuit_idx]+data_ver+".mat"
+    File_name="G1_xy_data_"+data_num_n+file_names[circuit_idx]+data_ver+".mat"
     if args.is_Test:
-        File_name="xy_data_"+data_num_n+file_names[circuit_idx]+data_ver+"_test_set.mat"
+        File_name="G1_xy_data_"+data_num_n+file_names[circuit_idx]+data_ver+"_test.mat"
 
 
     x_data,_ = arrange_data(Circuit_spec[circuit_idx],circuit_idx,size_number, number_of_point)
@@ -186,6 +192,9 @@ if __name__ == "__main__":
     print(y_data.shape)
     mdic={"x_data":x_data,"y_data":y_data}
     scipy.io.savemat(File_name, mdic)
+
+    # save freq
+    np.savetxt("angular_freq.csv", angular_frequency, delimiter=",", fmt="%s") 
     
 
 

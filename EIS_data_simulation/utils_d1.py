@@ -57,7 +57,7 @@ def Z_W(sigma,angular_frequency):
     """
         Define impedance of infinite Watburg element (W)
         
-        :param sigma: Warburg coefficient [Ohm s^-1/2]
+        :param sigma: Warburg coefficient [Ohm s^-1/2] (normalized)
         :param angular_frequency: omega [s^-1]
         :return W_impedace: Impedance of the Warburg Element [Ohm]
     """
@@ -101,7 +101,7 @@ def lin_rand(initial_gen,last_gen,size_number):
     lin_array = initial_gen + ( last_gen - initial_gen ) * np.random.rand( size_number )
     return lin_array
 
-def nor_rand(mu, size_number, sigma = None, ratio=0.2):
+def nor_rand(mu, size_number, sigma = None):
     """ 
     Generate random numbers from a normal distribution
 
@@ -112,8 +112,6 @@ def nor_rand(mu, size_number, sigma = None, ratio=0.2):
     """
     if sigma is None:
         sigma = 0.2*mu
-        if ratio is not None:
-            sigma = ratio * mu
     norm_array = np.random.normal(loc=mu, scale=sigma, size=size_number)
     return norm_array
 
@@ -533,105 +531,28 @@ def sim_cir7():
 
     return Zsum,np.array(Zparam)
 
-def sim_cir8():
-    """ Simulate circuit 8: R1 + (R2 || C1) + ( (R3 + Z ) || C2)"""
-    R1=log_rand(resistance_range[0],resistance_range[1],size_number)
-    Zr1= genZR(size_number,number_of_point,R1)
-
-    R2=log_rand(resistance_range[0],resistance_range[1],size_number)
-    Zr2= genZR(size_number,number_of_point,R2)
-
-    ideality_factor1= np.ones(size_number) # 1
-    Q1=log_rand(q_range[0],q_range[1],size_number)
-    Zq1= genZQ(size_number,number_of_point,Q1,ideality_factor1,angular_frequency)
-
-    ideality_factor2 = np.ones(size_number) # 1
-    Q2=log_rand(q_range[0],q_range[1],size_number)
-    Zq2= genZQ(size_number,number_of_point,Q2,ideality_factor2,angular_frequency)
-
-    R3=log_rand(resistance_range[0],resistance_range[1],size_number)
-    Zr3= genZR(size_number,number_of_point,R3)
-
-    sigma=log_rand(sigma_range[0],sigma_range[1],size_number)
-    Zw=genZW(size_number,number_of_point,sigma,angular_frequency)
-    
-    Zsum=Zr1 + 1 / ( 1 / Zr2 + 1 / Zq1 ) + 1 / ( 1 / Zq2 + 1 / ( Zr3 + Zw ) )
-    
-    Zparam=[]
-    for idx in range(size_number):
-        Zparam.append([R1[idx],R2[idx],R3[idx],Q1[idx],Q2[idx],sigma[idx]])    
-
-    return Zsum,np.array(Zparam)
-
-
-def sim_cir9():
-    """ Simulate circuit 9: R1 + (R2 || C1) + (R3 || C2) + ( (R4 + Z ) || C3)"""
-    R1=log_rand(resistance_range[0],resistance_range[1],size_number)
-    # R1 = nor_rand(mu=0.0083, size_number=size_number, ratio=0.5)
-    Zr1= genZR(size_number,number_of_point,R1)
-
-    R2=log_rand(resistance_range[0],resistance_range[1],size_number)
-    # R2 = nor_rand(mu=0.0145, size_number=size_number, ratio=0.5)
-    Zr2= genZR(size_number,number_of_point,R2)
-
-    R3=log_rand(resistance_range[0],resistance_range[1],size_number)
-    # R3 = nor_rand(mu=0.0098, size_number=size_number, ratio=0.5)
-    Zr3= genZR(size_number,number_of_point,R3)
-
-    R4=log_rand(resistance_range[0],resistance_range[1],size_number)
-    # R4 = nor_rand(mu=0.0200, size_number=size_number, ratio=0.5)
-    Zr4= genZR(size_number,number_of_point,R4)
-
-    ideality_factor1= np.ones(size_number) # 1
-    Q1=log_rand(q_range[0],q_range[1],size_number)
-    # Q1 = nor_rand(mu=0.1216, size_number=size_number, ratio=0.5)
-    Zq1= genZQ(size_number,number_of_point,Q1,ideality_factor1,angular_frequency)
-
-    ideality_factor2 = np.ones(size_number) # 1
-    Q2=log_rand(q_range[0],q_range[1],size_number)
-    # Q2 = nor_rand(mu=0.2187, size_number=size_number, ratio=0.5)
-    Zq2= genZQ(size_number,number_of_point,Q2,ideality_factor2,angular_frequency)
-
-
-    ideality_factor3 = np.ones(size_number) # 1
-    Q3=log_rand(q_range[0],q_range[1],size_number)
-    # Q3 = nor_rand(mu=0.0038, size_number=size_number, ratio=0.5)
-    Zq3= genZQ(size_number,number_of_point,Q3,ideality_factor3,angular_frequency)
-
-    sigma=log_rand(sigma_range[0],sigma_range[1],size_number)
-    # sigma = nor_rand(mu=0.0022, size_number=size_number, ratio=0.5)
-    Zw=genZW(size_number,number_of_point,sigma,angular_frequency)
-    
-    Zsum=Zr1 + 1 / ( 1 / Zr2 + 1 / Zq1 ) + 1 / ( 1 / Zr3 + 1 / Zq2 ) + 1 / ( 1 / Zq3 + 1 / ( Zr4 + Zw ) )
-    
-    Zparam=[]
-    for idx in range(size_number):
-        Zparam.append([R1[idx],R2[idx],R3[idx],R4[idx],Q1[idx],Q2[idx],Q3[idx],sigma[idx]])    
-        
-    return Zsum,np.array(Zparam)
-
 
 ###### Initialize Parameters ######
-np.random.seed(1)
+np.random.seed(0)
 #Number of circuit:
-number_of_circuit= 9    
+number_of_circuit= 7    
 #Number of spectrum in each circuit : 256 512 1024 2048 4096 8192 16384 32768 (131072)
 size_number= 32768
 #Numer of data point in each spectrum:
-number_of_point= 50  
+number_of_point= 60  
 #Range of frequency:
-angular_frequency=F_range(0.1,10000,number_of_point)[0] 
+angular_frequency=F_range(0.02,20000,number_of_point)[0] 
 #Range of resistance:
 # resistance_range=[10**-1,10**4] 
-resistance_range=[0.001,0.05] 
+resistance_range=[10**-2,10] 
 #Range of idality factor of CPE:
 alpha_range=[0.8,1]
 #Range of CPE capacitance:
 # q_range=[10**-5,10**-3]
-q_range=[0.001,5]
+q_range=[10**-3,1]
 #Range of sigma:
 # sigma_range=[10**0,10**3]
-sigma_range=[0.001,0.005]
+sigma_range=[10**-2,1]
 l_range=[10**-14,10**-11]
 
 
@@ -645,17 +566,12 @@ Circuit_spec[3],Circuit3_param=sim_cir4()
 Circuit_spec[4],Circuit4_param=sim_cir5()
 Circuit_spec[5],Circuit5_param=sim_cir6()
 Circuit_spec[6],Circuit6_param=sim_cir7()
-Circuit_spec[7],Circuit7_param=sim_cir8()
-Circuit_spec[8],Circuit8_param=sim_cir9()
-
-
 
 
 param_dict={"Circuit0_param":Circuit0_param,"Circuit1_param":Circuit1_param,
             "Circuit2_param":Circuit2_param,"Circuit3_param":Circuit3_param,
             "Circuit4_param":Circuit4_param, "Circuit5_param":Circuit5_param,
-            "Circuit6_param":Circuit6_param, "Circuit7_param":Circuit7_param,
-            "Circuit8_param":Circuit8_param}
+            "Circuit6_param":Circuit6_param}
 
 
 ##### Data Export #####

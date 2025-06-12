@@ -561,45 +561,45 @@ def sim_cir8():
     for idx in range(size_number):
         Zparam.append([R1[idx],R2[idx],R3[idx],Q1[idx],Q2[idx],sigma[idx]])    
 
-    return Zsum,np.array(Zparam)
+    return Zsum, np.array(Zparam)
 
 
 def sim_cir9():
-    """ Simulate circuit 9: R1 + (R2 || C1) + (R3 || C2) + ( (R4 + Z ) || C3)"""
-    R1=log_rand(resistance_range[0],resistance_range[1],size_number)
-    # R1 = nor_rand(mu=0.0083, size_number=size_number, ratio=0.5)
+    """ Simulate circuit 8: R1 + (R2 || C1) + (R3 || C2) + ( (R4 + Z ) || C3)"""
+    # R1=log_rand(resistance_range[0],resistance_range[1],size_number)
+    R1 = nor_rand(mu=0.0083, size_number=size_number, ratio=0.5)
     Zr1= genZR(size_number,number_of_point,R1)
 
-    R2=log_rand(resistance_range[0],resistance_range[1],size_number)
-    # R2 = nor_rand(mu=0.0145, size_number=size_number, ratio=0.5)
+    # R2=log_rand(resistance_range[0],resistance_range[1],size_number)
+    R2 = nor_rand(mu=0.0145, size_number=size_number, ratio=0.5)
     Zr2= genZR(size_number,number_of_point,R2)
 
-    R3=log_rand(resistance_range[0],resistance_range[1],size_number)
-    # R3 = nor_rand(mu=0.0098, size_number=size_number, ratio=0.5)
+    # R3=log_rand(resistance_range[0],resistance_range[1],size_number)
+    R3 = nor_rand(mu=0.0098, size_number=size_number, ratio=0.5)
     Zr3= genZR(size_number,number_of_point,R3)
 
-    R4=log_rand(resistance_range[0],resistance_range[1],size_number)
-    # R4 = nor_rand(mu=0.0200, size_number=size_number, ratio=0.5)
+    # R4=log_rand(resistance_range[0],resistance_range[1],size_number)
+    R4 = nor_rand(mu=0.0200, size_number=size_number, ratio=0.5)
     Zr4= genZR(size_number,number_of_point,R4)
 
     ideality_factor1= np.ones(size_number) # 1
-    Q1=log_rand(q_range[0],q_range[1],size_number)
-    # Q1 = nor_rand(mu=0.1216, size_number=size_number, ratio=0.5)
+    # Q1=log_rand(q_range[0],q_range[1],size_number)
+    Q1 = nor_rand(mu=0.1216, size_number=size_number, ratio=0.5)
     Zq1= genZQ(size_number,number_of_point,Q1,ideality_factor1,angular_frequency)
 
     ideality_factor2 = np.ones(size_number) # 1
-    Q2=log_rand(q_range[0],q_range[1],size_number)
-    # Q2 = nor_rand(mu=0.2187, size_number=size_number, ratio=0.5)
+    # Q2=log_rand(q_range[0],q_range[1],size_number)
+    Q2 = nor_rand(mu=0.2187, size_number=size_number, ratio=0.5)
     Zq2= genZQ(size_number,number_of_point,Q2,ideality_factor2,angular_frequency)
 
 
     ideality_factor3 = np.ones(size_number) # 1
-    Q3=log_rand(q_range[0],q_range[1],size_number)
-    # Q3 = nor_rand(mu=0.0038, size_number=size_number, ratio=0.5)
+    # Q3=log_rand(q_range[0],q_range[1],size_number)
+    Q3 = nor_rand(mu=0.0038, size_number=size_number, ratio=0.5)
     Zq3= genZQ(size_number,number_of_point,Q3,ideality_factor3,angular_frequency)
 
-    sigma=log_rand(sigma_range[0],sigma_range[1],size_number)
-    # sigma = nor_rand(mu=0.0022, size_number=size_number, ratio=0.5)
+    # sigma=log_rand(sigma_range[0],sigma_range[1],size_number)
+    sigma = nor_rand(mu=0.0022, size_number=size_number, ratio=0.5)
     Zw=genZW(size_number,number_of_point,sigma,angular_frequency)
     
     Zsum=Zr1 + 1 / ( 1 / Zr2 + 1 / Zq1 ) + 1 / ( 1 / Zr3 + 1 / Zq2 ) + 1 / ( 1 / Zq3 + 1 / ( Zr4 + Zw ) )
@@ -607,7 +607,9 @@ def sim_cir9():
     Zparam=[]
     for idx in range(size_number):
         Zparam.append([R1[idx],R2[idx],R3[idx],R4[idx],Q1[idx],Q2[idx],Q3[idx],sigma[idx]])    
-        
+
+    # concate angular frequency to the parameters first column
+    Zparam = np.insert(Zparam, 0, angular_frequency, axis=1)
     return Zsum,np.array(Zparam)
 
 
@@ -623,15 +625,15 @@ number_of_point= 50
 angular_frequency=F_range(0.1,10000,number_of_point)[0] 
 #Range of resistance:
 # resistance_range=[10**-1,10**4] 
-resistance_range=[0.001,0.05] 
+resistance_range=[10**-3,1] 
 #Range of idality factor of CPE:
 alpha_range=[0.8,1]
 #Range of CPE capacitance:
 # q_range=[10**-5,10**-3]
-q_range=[0.001,5]
+q_range=[10**-3,1]
 #Range of sigma:
 # sigma_range=[10**0,10**3]
-sigma_range=[0.001,0.005]
+sigma_range=[10**-3,10**-1]
 l_range=[10**-14,10**-11]
 
 
