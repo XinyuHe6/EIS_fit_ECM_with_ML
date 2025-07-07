@@ -12,4 +12,4 @@
 #SBATCH --output=/home/lhalice/EIS_fit_ECM_with_ML/generate_data.log
 
 
-python EIS_data_simulation/eis_data_simulation.py  --circuit_model 9 --is_Test 1
+python EIS_data_simulation/eis_data_simulation_6basicECMclassification.py  --is_Test 1

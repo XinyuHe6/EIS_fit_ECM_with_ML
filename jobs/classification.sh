@@ -9,7 +9,7 @@
 #SBATCH --gpus=1
 #SBATCH --mem-per-gpu=16GB
 #SBATCH --time=4:00:00
-#SBATCH --output=/home/lhalice/EIS_fit_ECM_with_ML/out-testgpu.log
+#SBATCH --output=/home/lhalice/EIS_fit_ECM_with_ML/classification.log
 
 
 python Classification_ECM.py 

@@ -22,7 +22,7 @@ print("Num GPUs Available: ", len(tf.config.list_physical_devices('GPU')))
 
 ##### Load EIS data-set #####
 
-filename="EISmat/xy_data_33k_7circuit_v2.mat"
+filename="xy_data_33k_6circuit_v2.mat"
 
 x=scipy.io.loadmat(filename)["x_data"]
 y=scipy.io.loadmat(filename)["y_data"]
@@ -50,7 +50,7 @@ x_train, x_test, y_train, y_test = train_test_split(new_x, y, test_size=0.2, ran
 # drop rate 0.7
 # batch size 1024
 
-Experiment_name="Classification_drop07_batch"
+Experiment_name="lab6basicECM_Classification_drop07_batch"
 fn_tmp=filename.split("xy_data_",1)[1].split(".",1)[0]
 Experiment_path="EIS_"+fn_tmp+"_model_"+Experiment_name
 
@@ -97,7 +97,7 @@ def make_model(input_shape):
                                )(connector)
     
 #-------------------------------------------------------------------------------
-    output_layer = keras.layers.Dense(7, activation="softmax")(dense)
+    output_layer = keras.layers.Dense(6, activation="softmax")(dense)
 
     return keras.models.Model(inputs=input_layer, outputs=output_layer)
 
@@ -222,7 +222,7 @@ cm=confusion_matrix(test_list1,test_list2)
 
 disp = ConfusionMatrixDisplay(confusion_matrix=cm,
                               display_labels=["C1","C2"
-                              ,"C3","C4","C5", "C6", "C7"])
+                              ,"C3","C4","C5", "C6"])
 px = 1/plt.rcParams["figure.dpi"]  # pixel in inches
 fig, ax = plt.subplots(figsize=(600*px, 600*px),dpi=300)
 disp.plot(cmap="summer",ax=ax)
@@ -231,7 +231,7 @@ plt.title(cfmc_title)
 plt.savefig(Experiment_path+"/"+"CMatrix.png")
 # plt.show()
 
-c1,c2,c3,c4,c5,c6,c7=0,0,0,0,0,0,0
+c1,c2,c3,c4,c5,c6=0,0,0,0,0,0
 for idx in range(len(test_list1)):
     if test_list1[idx]==0:c1=c1+1
     if test_list1[idx]==1:c2=c2+1    
@@ -239,6 +239,5 @@ for idx in range(len(test_list1)):
     if test_list1[idx]==3:c4=c4+1
     if test_list1[idx]==4:c5=c5+1 
     if test_list1[idx]==5:c6=c6+1   
-    if test_list1[idx]==6:c7=c7+1   
-print(c1,c2,c3,c4,c5,c6,c7)
+print(c1,c2,c3,c4,c5,c6)
 
