@@ -7,6 +7,44 @@ import matplotlib.ticker as ticker
 from matplotlib.ticker import EngFormatter
 import scipy.io
 
+R_low=0.001
+R_high=1.0
+Q_low=0.001
+Q_high=1.0
+Zw_low=0.001
+Zw_high=1.0
+L_low=0.00000001
+L_high=0.00001
+
+tau1_1_low  = 1e-4
+tau1_1_high = 3e-3
+
+tau2_1_low = 5e-4
+tau2_1_high = 2e-3
+tau2_2_low  = 4e-3
+tau2_2_high = 1e-2
+
+tau3_1_low = 5e-4
+tau3_1_high = 2e-3
+tau3_2_low = 3e-3
+tau3_2_high = 1e-2
+tau3_3_low = 2e-2
+tau3_3_high = 4e-2
+
+tau4_1_low = 2e-4
+tau4_1_high = 2e-3
+
+tau5_1_low = 1e-4
+tau5_1_high = 1.2e-3
+tau5_2_low = 1e-3
+tau5_2_high = 8e-3
+
+tau6_1_low = 6e-5
+tau6_1_high = 1e-3
+tau6_2_low = 3e-4
+tau6_2_high = 4e-3
+tau6_3_low = 2.5e-3
+tau6_3_high = 4e-2
 
 ###### Define Essential Elements ######
 # Angular frequency: omega = 2 * pi * f
@@ -322,177 +360,460 @@ class Zplot:
         return
 
 ##### Circuit Simulation #####
+
 def sim_cir1():
-    """ Simulate circuit 1: R0 + (R1 || C1)"""
-    R0 = lin_rand_wpadding(0.0114, 0.0784, range_padding, size_number)
-    Zr0= genZR(size_number,number_of_point,R0)
+    """ L + R0 + (R1 || CPE1) + Zw """
+    L = lin_rand(L_low, L_high, size_number)
+    Zl = genZL(size_number, number_of_point, L)
+    R0 = lin_rand(R_low, R_high, size_number)
+    Zr0 = genZR(size_number, number_of_point, R0)
+    R1 = lin_rand(R_low, R_high, size_number)
+    Zr1 = genZR(size_number, number_of_point, R1)
+    alpha1 = lin_rand(alpha_range[0], alpha_range[1], size_number)
 
-    R1 = lin_rand_wpadding(0.0209, 1.3933, range_padding, size_number)
-    Zr1= genZR(size_number,number_of_point,R1)
-    
-    ideality_factor1= np.ones(size_number)
-    Q1=lin_rand_wpadding(0.0029, 0.0142, range_padding, size_number)
-    Zq1= genZQ(size_number,number_of_point,Q1,ideality_factor1, angular_frequency)
+    # -------- tau sampling --------
+    tau1 = log_rand(tau1_1_low, tau1_1_high, size_number)
 
-    Zsum = Zr0 + 1 / ( 1 / Zr1 + 1 / Zq1 ) 
+    # Q = tau^alpha / R
+    Q1 = (tau1 ** alpha1) / R1
+
+    Zq1 = genZQ(size_number, number_of_point, Q1, alpha1, angular_frequency)
+
+    sigma = lin_rand(Zw_low, Zw_high, size_number)
+    Zw = genZW(size_number, number_of_point, sigma, angular_frequency)
+
+    Zsum = Zl + Zr0 + 1/(1/Zr1 + 1/Zq1) + Zw
+
     Zparam=[]
     for idx in range(size_number):
-        Zparam.append([R0[idx],R1[idx],Q1[idx]])
-    
-    return Zsum,np.array(Zparam)
+        Zparam.append([L[idx], R0[idx], R1[idx], Q1[idx], alpha1[idx], sigma[idx], tau1[idx]])
 
+    return Zsum, np.array(Zparam)
+
+# def sim_cir1():
+#     """ L + R0 + (R1 || CPE1) + Zw """
+
+#     L = lin_rand(L_low, L_high, size_number)
+#     Zl = genZL(size_number, number_of_point, L)
+
+#     R0 = lin_rand(R_low, R_high, size_number)
+#     Zr0 = genZR(size_number, number_of_point, R0)
+
+#     R1 = lin_rand(R_low, R_high, size_number)
+#     Zr1 = genZR(size_number, number_of_point, R1)
+
+#     alpha1 = lin_rand(alpha_range[0], alpha_range[1], size_number)
+#     Q1 = lin_rand(Q_low, Q_high, size_number)
+#     Zq1 = genZQ(size_number, number_of_point, Q1, alpha1, angular_frequency)
+
+#     sigma = lin_rand(Zw_low, Zw_high, size_number)
+#     Zw = genZW(size_number, number_of_point, sigma, angular_frequency)
+
+#     Zsum = Zl + Zr0 + 1/(1/Zr1 + 1/Zq1) + Zw
+
+#     Zparam=[]
+#     for idx in range(size_number):
+#         Zparam.append([L[idx], R0[idx], R1[idx], Q1[idx], alpha1[idx], sigma[idx]])
+
+#     return Zsum, np.array(Zparam)
 
 def sim_cir2():
-    """ Simulate circuit 2: R0 + (R1 || Q1) + (R2 || Q2)"""
-    R0 = lin_rand_wpadding(0.0092, 0.0605, range_padding, size_number)
-    Zr0= genZR(size_number,number_of_point,R0)
+    """ L + R0 + (R1 || CPE1) + (R2 || CPE2) + Zw """
+    L = lin_rand(L_low, L_high, size_number)
+    Zl = genZL(size_number, number_of_point, L)
+    R0 = lin_rand(R_low, R_high, size_number)
+    Zr0 = genZR(size_number, number_of_point, R0)
+    R1 = lin_rand(R_low, R_high, size_number)
+    R2 = lin_rand(R_low, R_high, size_number)
+    Zr1 = genZR(size_number, number_of_point, R1)
+    Zr2 = genZR(size_number, number_of_point, R2)
+    alpha1 = lin_rand(alpha_range[0], alpha_range[1], size_number)
+    alpha2 = lin_rand(alpha_range[0], alpha_range[1], size_number)
 
-    R1 = lin_rand_wpadding(0.0128, 0.8966, range_padding, size_number)
-    Zr1= genZR(size_number,number_of_point,R1)
+    # -------- tau sampling --------
+    tau1 = log_rand(tau2_1_low, tau2_1_high, size_number)
+    tau2 = log_rand(tau2_2_low, tau2_2_high, size_number)
 
-    R2 = lin_rand_wpadding(0.0077, 0.8528, range_padding, size_number)
-    Zr2= genZR(size_number,number_of_point,R2)
+    # enforce tau1 < tau2
+    tau1 = np.minimum(tau1, tau2 * 0.8)
 
-    ideality_factor1= np.ones(size_number)
-    Q1=lin_rand_wpadding(0.0014, 2.2993, range_padding, size_number)
-    Zq1= genZQ(size_number,number_of_point,Q1,ideality_factor1, angular_frequency)
+    Q1 = (tau1 ** alpha1) / R1
+    Q2 = (tau2 ** alpha2) / R2
 
-    ideality_factor2= np.ones(size_number)
-    Q2=lin_rand_wpadding(0.0023, 0.2525, range_padding, size_number)
-    Zq2= genZQ(size_number,number_of_point,Q2,ideality_factor2, angular_frequency)
-    
-    Zsum=Zr0 + 1 / ( 1 / Zr1 + 1 / Zq1 ) + 1 / ( 1 / Zr2 + 1 / Zq2 ) 
-    
+    Zq1 = genZQ(size_number, number_of_point, Q1, alpha1, angular_frequency)
+    Zq2 = genZQ(size_number, number_of_point, Q2, alpha2, angular_frequency)
+
+    sigma = lin_rand(Zw_low, Zw_high, size_number)
+    Zw = genZW(size_number, number_of_point, sigma, angular_frequency)
+
+    Zsum = Zl + Zr0 + 1/(1/Zr1 + 1/Zq1) + 1/(1/Zr2 + 1/Zq2) + Zw
+
     Zparam=[]
     for idx in range(size_number):
-        Zparam.append([R0[idx],R1[idx],Q1[idx],Q2[idx]])    
+        Zparam.append([L[idx], R0[idx], R1[idx], R2[idx],
+                       Q1[idx], Q2[idx],
+                       alpha1[idx], alpha2[idx],
+                       sigma[idx],
+                       tau1[idx], tau2[idx]])
 
-    return Zsum,np.array(Zparam)
+    return Zsum, np.array(Zparam)
+
+# def sim_cir2():
+#     """ L + R0 + (R1 || CPE1) + (R2 || CPE2) + Zw """
+
+#     L = lin_rand(L_low, L_high, size_number)
+#     Zl = genZL(size_number, number_of_point, L)
+
+#     R0 = lin_rand(R_low, R_high, size_number)
+#     Zr0 = genZR(size_number, number_of_point, R0)
+
+#     R1 = lin_rand(R_low, R_high, size_number)
+#     Zr1 = genZR(size_number, number_of_point, R1)
+
+#     R2 = lin_rand(R_low, R_high, size_number)
+#     Zr2 = genZR(size_number, number_of_point, R2)
+
+#     alpha1 = lin_rand(alpha_range[0], alpha_range[1], size_number)
+#     alpha2 = lin_rand(alpha_range[0], alpha_range[1], size_number)
+
+#     Q1 = lin_rand(Q_low, Q_high, size_number)
+#     Q2 = lin_rand(Q_low, Q_high, size_number)
+
+#     Zq1 = genZQ(size_number, number_of_point, Q1, alpha1, angular_frequency)
+#     Zq2 = genZQ(size_number, number_of_point, Q2, alpha2, angular_frequency)
+
+#     sigma = lin_rand(Zw_low, Zw_high, size_number)
+#     Zw = genZW(size_number, number_of_point, sigma, angular_frequency)
+
+#     Zsum = Zl + Zr0 + 1/(1/Zr1 + 1/Zq1) + 1/(1/Zr2 + 1/Zq2) + Zw
+
+#     Zparam=[]
+#     for idx in range(size_number):
+#         Zparam.append([L[idx], R0[idx], R1[idx], R2[idx], Q1[idx], Q2[idx], alpha1[idx], alpha2[idx], sigma[idx]])
+
+#     return Zsum, np.array(Zparam)
 
 def sim_cir3():
-    """ Simulate circuit 3: R0 + (R1 || Q1) + (R2 || Q2) + (R3 || Q3)"""
-    R0 = lin_rand_wpadding(0.0083, 0.0734, range_padding, size_number)
-    Zr0= genZR(size_number,number_of_point,R0)
+    """ L + R0 + (R1 || CPE1) + (R2 || CPE2) + (R3 || CPE3) + Zw """
 
-    R1 = lin_rand_wpadding(0.0075, 0.8327, range_padding, size_number)
-    Zr1= genZR(size_number,number_of_point,R1)
+    L = lin_rand(L_low, L_high, size_number)
+    Zl = genZL(size_number, number_of_point, L)
 
-    R2 = lin_rand_wpadding(0.0053, 0.8429, range_padding, size_number)
-    Zr2= genZR(size_number,number_of_point,R2)
+    R0 = lin_rand(R_low, R_high, size_number)
+    Zr0 = genZR(size_number, number_of_point, R0)
 
-    R3 = lin_rand_wpadding(0.0004, 0.8050, range_padding, size_number)
-    Zr3= genZR(size_number,number_of_point,R3)
+    R1 = lin_rand(R_low, R_high, size_number)
+    R2 = lin_rand(R_low, R_high, size_number)
+    R3 = lin_rand(R_low, R_high, size_number)
 
-    ideality_factor1= np.ones(size_number)
-    Q1=lin_rand_wpadding(0.0014, 5.7718, range_padding, size_number)
-    Zq1= genZQ(size_number,number_of_point,Q1,ideality_factor1, angular_frequency)
+    Zr1 = genZR(size_number, number_of_point, R1)
+    Zr2 = genZR(size_number, number_of_point, R2)
+    Zr3 = genZR(size_number, number_of_point, R3)
 
-    ideality_factor2= np.ones(size_number)
-    Q2=lin_rand_wpadding(0.0010, 44.0870, range_padding, size_number)
-    Zq2= genZQ(size_number,number_of_point,Q2,ideality_factor2, angular_frequency)
+    alpha1 = lin_rand(alpha_range[0], alpha_range[1], size_number)
+    alpha2 = lin_rand(alpha_range[0], alpha_range[1], size_number)
+    alpha3 = lin_rand(alpha_range[0], alpha_range[1], size_number)
 
-    ideality_factor3= np.ones(size_number)
-    Q3=lin_rand_wpadding(0.0025, 49.8695, range_padding, size_number)
-    Zq3= genZQ(size_number,number_of_point,Q3,ideality_factor3, angular_frequency)
-    
-    Zsum=Zr0 + 1 / ( 1 / Zr1 + 1 / Zq1 ) + 1 / ( 1 / Zr2 + 1 / Zq2 ) + 1 / ( 1 / Zr3 + 1 / Zq3 )
+    # -------- tau sampling --------
+    tau1 = log_rand(tau3_1_low, tau3_1_high, size_number)
+    tau2 = log_rand(tau3_2_low, tau3_2_high, size_number)
+    tau3 = log_rand(tau3_3_low, tau3_3_high, size_number)
+
+    # enforce ordering
+    tau2 = np.maximum(tau2, tau1 * 1.2)
+    tau3 = np.maximum(tau3, tau2 * 1.2)
+
+    Q1 = (tau1 ** alpha1) / R1
+    Q2 = (tau2 ** alpha2) / R2
+    Q3 = (tau3 ** alpha3) / R3
+
+    Zq1 = genZQ(size_number, number_of_point, Q1, alpha1, angular_frequency)
+    Zq2 = genZQ(size_number, number_of_point, Q2, alpha2, angular_frequency)
+    Zq3 = genZQ(size_number, number_of_point, Q3, alpha3, angular_frequency)
+
+    sigma = lin_rand(Zw_low, Zw_high, size_number)
+    Zw = genZW(size_number, number_of_point, sigma, angular_frequency)
+
+    Zsum = Zl + Zr0 + \
+           1/(1/Zr1 + 1/Zq1) + \
+           1/(1/Zr2 + 1/Zq2) + \
+           1/(1/Zr3 + 1/Zq3) + Zw
 
     Zparam=[]
     for idx in range(size_number):
-        Zparam.append([R0[idx],R1[idx],R2[idx],Q1[idx],Q2[idx],Q3[idx]]) 
+        Zparam.append([L[idx], R0[idx], R1[idx], R2[idx], R3[idx],
+                       Q1[idx], Q2[idx], Q3[idx],
+                       alpha1[idx], alpha2[idx], alpha3[idx],
+                       sigma[idx],
+                       tau1[idx], tau2[idx], tau3[idx]])
 
-    return Zsum,np.array(Zparam)
+    return Zsum, np.array(Zparam)
 
+# def sim_cir3():
+#     """ L + R0 + (R1 || CPE1) + (R2 || CPE2) + (R3 || CPE3) + Zw """
+
+#     L = lin_rand(L_low, L_high, size_number)
+#     Zl = genZL(size_number, number_of_point, L)
+
+#     R0 = lin_rand(R_low, R_high, size_number)
+#     Zr0 = genZR(size_number, number_of_point, R0)
+
+#     R1 = lin_rand(R_low, R_high, size_number)
+#     R2 = lin_rand(R_low, R_high, size_number)
+#     R3 = lin_rand(R_low, R_high, size_number)
+
+#     Zr1 = genZR(size_number, number_of_point, R1)
+#     Zr2 = genZR(size_number, number_of_point, R2)
+#     Zr3 = genZR(size_number, number_of_point, R3)
+
+#     alpha1 = lin_rand(alpha_range[0], alpha_range[1], size_number)
+#     alpha2 = lin_rand(alpha_range[0], alpha_range[1], size_number)
+#     alpha3 = lin_rand(alpha_range[0], alpha_range[1], size_number)
+
+#     Q1 = lin_rand(Q_low, Q_high, size_number)
+#     Q2 = lin_rand(Q_low, Q_high, size_number)
+#     Q3 = lin_rand(Q_low, Q_high, size_number)
+
+#     Zq1 = genZQ(size_number, number_of_point, Q1, alpha1, angular_frequency)
+#     Zq2 = genZQ(size_number, number_of_point, Q2, alpha2, angular_frequency)
+#     Zq3 = genZQ(size_number, number_of_point, Q3, alpha3, angular_frequency)
+
+#     sigma = lin_rand(Zw_low, Zw_high, size_number)
+#     Zw = genZW(size_number, number_of_point, sigma, angular_frequency)
+
+#     Zsum = Zl + Zr0 + \
+#            1/(1/Zr1 + 1/Zq1) + \
+#            1/(1/Zr2 + 1/Zq2) + \
+#            1/(1/Zr3 + 1/Zq3) + Zw
+
+#     Zparam=[]
+#     for idx in range(size_number):
+#         Zparam.append([L[idx], R0[idx], R1[idx], R2[idx], R3[idx], Q1[idx], Q2[idx], Q3[idx], alpha1[idx], alpha2[idx], alpha3[idx], sigma[idx]])
+
+#     return Zsum, np.array(Zparam)
+
+
+
+# def sim_cir3():
+#     """ Simulate circuit 3: R0 + (R1 || Q1) + (R2 || Q2) + (R3 || Q3)"""
+#     R0 = lin_rand_wpadding(0.0083, 0.0734, range_padding, size_number)
+#     Zr0= genZR(size_number,number_of_point,R0)
+
+#     R1 = lin_rand_wpadding(0.0075, 0.8327, range_padding, size_number)
+#     Zr1= genZR(size_number,number_of_point,R1)
+
+#     R2 = lin_rand_wpadding(0.0053, 0.8429, range_padding, size_number)
+#     Zr2= genZR(size_number,number_of_point,R2)
+
+#     R3 = lin_rand_wpadding(0.0004, 0.8050, range_padding, size_number)
+#     Zr3= genZR(size_number,number_of_point,R3)
+
+#     ideality_factor1= np.ones(size_number)
+#     Q1=lin_rand_wpadding(0.0014, 5.7718, range_padding, size_number)
+#     Zq1= genZQ(size_number,number_of_point,Q1,ideality_factor1, angular_frequency)
+
+#     ideality_factor2= np.ones(size_number)
+#     Q2=lin_rand_wpadding(0.0010, 44.0870, range_padding, size_number)
+#     Zq2= genZQ(size_number,number_of_point,Q2,ideality_factor2, angular_frequency)
+
+#     ideality_factor3= np.ones(size_number)
+#     Q3=lin_rand_wpadding(0.0025, 49.8695, range_padding, size_number)
+#     Zq3= genZQ(size_number,number_of_point,Q3,ideality_factor3, angular_frequency)
+    
+#     Zsum=Zr0 + 1 / ( 1 / Zr1 + 1 / Zq1 ) + 1 / ( 1 / Zr2 + 1 / Zq2 ) + 1 / ( 1 / Zr3 + 1 / Zq3 )
+
+#     Zparam=[]
+#     for idx in range(size_number):
+#         Zparam.append([R0[idx],R1[idx],R2[idx],Q1[idx],Q2[idx],Q3[idx]]) 
+
+#     return Zsum,np.array(Zparam)
 def sim_cir4():
-    """ Simulate circuit 1: R0 + ( (R1 + Aw) || C1)"""
-    R0 = lin_rand_wpadding(0.0111, 0.0749, range_padding, size_number)
-    Zr0= genZR(size_number,number_of_point,R0)
+    """ L + R0 + ((R1 + Zw) || CPE1) """
 
-    R1 = lin_rand_wpadding(0.0204, 1.3482, range_padding, size_number)
-    Zr1= genZR(size_number,number_of_point,R1)
-    
-    ideality_factor1= np.ones(size_number)
-    Q1=lin_rand_wpadding(0.0027, 0.0118, range_padding, size_number)
-    Zq1= genZQ(size_number,number_of_point,Q1,ideality_factor1, angular_frequency)
+    L = lin_rand(L_low, L_high, size_number)
+    Zl = genZL(size_number, number_of_point, L)
 
-    sigma=lin_rand_wpadding(0.0022, 0.1135, range_padding, size_number)
-    Zw=genZW(size_number,number_of_point,sigma,angular_frequency)
+    R0 = lin_rand(R_low, R_high, size_number)
+    Zr0 = genZR(size_number, number_of_point, R0)
 
-    Zsum = Zr0 + 1 / ( 1 / (Zr1 + Zw) + 1 / Zq1 )
+    R1 = lin_rand(R_low, R_high, size_number)
+    Zr1 = genZR(size_number, number_of_point, R1)
 
-    Zparam=[]
+    alpha1 = lin_rand(alpha_range[0], alpha_range[1], size_number)
+
+    # -------- tau sampling --------
+    tau1 = log_rand(tau4_1_low, tau4_1_high, size_number)
+
+    Q1 = (tau1 ** alpha1) / R1
+
+    Zq1 = genZQ(size_number, number_of_point, Q1, alpha1, angular_frequency)
+
+    sigma = lin_rand(Zw_low, Zw_high, size_number)
+    Zw = genZW(size_number, number_of_point, sigma, angular_frequency)
+
+    Zsum = Zl + Zr0 + 1 / (1 / (Zr1 + Zw) + 1 / Zq1)
+
+    Zparam = []
     for idx in range(size_number):
-        Zparam.append([R0[idx],R1[idx],Q1[idx],sigma[idx]])
+        Zparam.append([L[idx], R0[idx], R1[idx],
+                       Q1[idx], alpha1[idx],
+                       sigma[idx],
+                       tau1[idx]])
 
-    return Zsum,np.array(Zparam)
+    return Zsum, np.array(Zparam)
 
+# def sim_cir4():
+#     """ Simulate circuit 1: R0 + ( (R1 + Aw) || C1)"""
+#     R0 = lin_rand_wpadding(0.0111, 0.0749, range_padding, size_number)
+#     Zr0= genZR(size_number,number_of_point,R0)
+
+#     R1 = lin_rand_wpadding(0.0204, 1.3482, range_padding, size_number)
+#     Zr1= genZR(size_number,number_of_point,R1)
+    
+#     ideality_factor1= np.ones(size_number)
+#     Q1=lin_rand_wpadding(0.0027, 0.0118, range_padding, size_number)
+#     Zq1= genZQ(size_number,number_of_point,Q1,ideality_factor1, angular_frequency)
+
+#     sigma=lin_rand_wpadding(0.0022, 0.1135, range_padding, size_number)
+#     Zw=genZW(size_number,number_of_point,sigma,angular_frequency)
+
+#     Zsum = Zr0 + 1 / ( 1 / (Zr1 + Zw) + 1 / Zq1 )
+
+#     Zparam=[]
+#     for idx in range(size_number):
+#         Zparam.append([R0[idx],R1[idx],Q1[idx],sigma[idx]])
+
+#     return Zsum,np.array(Zparam)
 def sim_cir5():
-    """ Simulate circuit 1: R0 + ( R1 || C1) + ( (R2 + Aw) || C2)"""
-    R0 = lin_rand_wpadding(0.0090, 0.0586, range_padding, size_number)
-    Zr0= genZR(size_number,number_of_point,R0)
+    """ L + R0 + (R1 || CPE1) + ((R2 + Zw) || CPE2) """
 
-    R1 = lin_rand_wpadding(0.0158, 0.8386, range_padding, size_number)
-    Zr1= genZR(size_number,number_of_point,R1)
+    L = lin_rand(L_low, L_high, size_number)
+    Zl = genZL(size_number, number_of_point, L)
 
-    R2 = lin_rand_wpadding(0.0076, 0.6878, range_padding, size_number)
-    Zr2= genZR(size_number,number_of_point,R2)
-    
-    ideality_factor1= np.ones(size_number)
-    Q1=lin_rand_wpadding(0.0013, 0.0391, range_padding, size_number)
-    Zq1= genZQ(size_number,number_of_point,Q1,ideality_factor1, angular_frequency)
+    R0 = lin_rand(R_low, R_high, size_number)
+    Zr0 = genZR(size_number, number_of_point, R0)
 
-    ideality_factor2= np.ones(size_number)
-    Q2=lin_rand_wpadding(0.0031, 0.6367, range_padding, size_number)
-    Zq2= genZQ(size_number,number_of_point,Q2,ideality_factor2, angular_frequency)
+    R1 = lin_rand(R_low, R_high, size_number)
+    R2 = lin_rand(R_low, R_high, size_number)
 
-    sigma=lin_rand_wpadding(0.0012, 0.0462, range_padding, size_number)
-    Zw=genZW(size_number,number_of_point,sigma,angular_frequency)
+    Zr1 = genZR(size_number, number_of_point, R1)
+    Zr2 = genZR(size_number, number_of_point, R2)
 
-    Zsum = Zr0 + 1 / ( 1 / Zr1 + 1 / Zq1 ) + 1 / ( 1 / (Zr2 + Zw) + 1 / Zq2 )
+    alpha1 = lin_rand(alpha_range[0], alpha_range[1], size_number)
+    alpha2 = lin_rand(alpha_range[0], alpha_range[1], size_number)
 
-    Zparam=[]
+    # -------- tau sampling --------
+    tau1 = log_rand(tau5_1_low, tau5_1_high, size_number)
+    tau2 = log_rand(tau5_2_low, tau5_2_high, size_number)
+
+    # enforce tau1 < tau2
+    tau1 = np.minimum(tau1, tau2 * 0.8)
+
+    Q1 = (tau1 ** alpha1) / R1
+    Q2 = (tau2 ** alpha2) / R2
+
+    Zq1 = genZQ(size_number, number_of_point, Q1, alpha1, angular_frequency)
+    Zq2 = genZQ(size_number, number_of_point, Q2, alpha2, angular_frequency)
+
+    sigma = lin_rand(Zw_low, Zw_high, size_number)
+    Zw = genZW(size_number, number_of_point, sigma, angular_frequency)
+
+    Zsum = Zl + Zr0 + 1/(1/Zr1 + 1/Zq1) + 1/(1/(Zr2 + Zw) + 1/Zq2)
+
+    Zparam = []
     for idx in range(size_number):
-        Zparam.append([R0[idx],R1[idx],R2[idx],Q1[idx],Q2[idx],sigma[idx]])
+        Zparam.append([L[idx], R0[idx], R1[idx], R2[idx],
+                       Q1[idx], Q2[idx],
+                       alpha1[idx], alpha2[idx],
+                       sigma[idx],
+                       tau1[idx], tau2[idx]])
 
-    return Zsum,np.array(Zparam)
+    return Zsum, np.array(Zparam)
 
+# def sim_cir5():
+#     """ Simulate circuit 1: R0 + ( R1 || C1) + ( (R2 + Aw) || C2)"""
+#     R0 = lin_rand_wpadding(0.0090, 0.0586, range_padding, size_number)
+#     Zr0= genZR(size_number,number_of_point,R0)
+
+#     R1 = lin_rand_wpadding(0.0158, 0.8386, range_padding, size_number)
+#     Zr1= genZR(size_number,number_of_point,R1)
+
+#     R2 = lin_rand_wpadding(0.0076, 0.6878, range_padding, size_number)
+#     Zr2= genZR(size_number,number_of_point,R2)
+    
+#     ideality_factor1= np.ones(size_number)
+#     Q1=lin_rand_wpadding(0.0013, 0.0391, range_padding, size_number)
+#     Zq1= genZQ(size_number,number_of_point,Q1,ideality_factor1, angular_frequency)
+
+#     ideality_factor2= np.ones(size_number)
+#     Q2=lin_rand_wpadding(0.0031, 0.6367, range_padding, size_number)
+#     Zq2= genZQ(size_number,number_of_point,Q2,ideality_factor2, angular_frequency)
+
+#     sigma=lin_rand_wpadding(0.0012, 0.0462, range_padding, size_number)
+#     Zw=genZW(size_number,number_of_point,sigma,angular_frequency)
+
+#     Zsum = Zr0 + 1 / ( 1 / Zr1 + 1 / Zq1 ) + 1 / ( 1 / (Zr2 + Zw) + 1 / Zq2 )
+
+#     Zparam=[]
+#     for idx in range(size_number):
+#         Zparam.append([R0[idx],R1[idx],R2[idx],Q1[idx],Q2[idx],sigma[idx]])
+
+#     return Zsum,np.array(Zparam)
 def sim_cir6():
-    """ Simulate circuit 1: R0 + (R1 || C1) + (R2 || C2) + ( (R3 + Aw) || C3)"""
-    R0 = lin_rand_wpadding(0.0081, 0.0511, range_padding, size_number)
-    Zr0= genZR(size_number,number_of_point,R0)
+    """ L + R0 + (R1 || CPE1) + (R2 || CPE2) + ((R3 + Zw) || CPE3) """
 
-    R1 = lin_rand_wpadding(0.0073, 0.3572, range_padding, size_number)
-    Zr1= genZR(size_number,number_of_point,R1)
+    L = lin_rand(L_low, L_high, size_number)
+    Zl = genZL(size_number, number_of_point, L)
 
-    R2 = lin_rand_wpadding(0.0036, 0.8328, range_padding, size_number)
-    Zr2= genZR(size_number,number_of_point,R2)
+    R0 = lin_rand(R_low, R_high, size_number)
+    Zr0 = genZR(size_number, number_of_point, R0)
 
-    R3 = lin_rand_wpadding(0.0072, 0.8178, range_padding, size_number)
-    Zr3= genZR(size_number,number_of_point,R3)
-    
-    ideality_factor1= np.ones(size_number)
-    Q1=lin_rand_wpadding(0.0025, 0.0765, range_padding, size_number)
-    Zq1= genZQ(size_number,number_of_point,Q1,ideality_factor1, angular_frequency)
+    R1 = lin_rand(R_low, R_high, size_number)
+    R2 = lin_rand(R_low, R_high, size_number)
+    R3 = lin_rand(R_low, R_high, size_number)
 
-    ideality_factor2= np.ones(size_number)
-    Q2=lin_rand_wpadding(0.0041, 4.3706, range_padding, size_number)
-    Zq2= genZQ(size_number,number_of_point,Q2,ideality_factor2, angular_frequency)
+    Zr1 = genZR(size_number, number_of_point, R1)
+    Zr2 = genZR(size_number, number_of_point, R2)
+    Zr3 = genZR(size_number, number_of_point, R3)
 
-    ideality_factor3= np.ones(size_number)
-    Q3=lin_rand_wpadding(0.0010, 0.0868, range_padding, size_number)
-    Zq3= genZQ(size_number,number_of_point,Q3,ideality_factor3, angular_frequency)
+    alpha1 = lin_rand(alpha_range[0], alpha_range[1], size_number)
+    alpha2 = lin_rand(alpha_range[0], alpha_range[1], size_number)
+    alpha3 = lin_rand(alpha_range[0], alpha_range[1], size_number)
 
-    sigma=lin_rand_wpadding(0.0010, 0.0312, range_padding, size_number)
-    Zw=genZW(size_number,number_of_point,sigma,angular_frequency)
+    # -------- tau sampling --------
+    tau1 = log_rand(tau6_1_low, tau6_1_high, size_number)
+    tau2 = log_rand(tau6_2_low, tau6_2_high, size_number)
+    tau3 = log_rand(tau6_3_low, tau6_3_high, size_number)
 
-    Zsum = Zr0 + 1 / ( 1 / Zr1 + 1 / Zq1 ) + 1 / ( 1 / Zr2 + 1 / Zq2 ) +  1 / ( 1 / (Zr3 + Zw) + 1 / Zq3 )
+    # enforce ordering
+    tau2 = np.maximum(tau2, tau1 * 1.2)
+    tau3 = np.maximum(tau3, tau2 * 1.2)
 
-    Zparam=[]
+    Q1 = (tau1 ** alpha1) / R1
+    Q2 = (tau2 ** alpha2) / R2
+    Q3 = (tau3 ** alpha3) / R3
+
+    Zq1 = genZQ(size_number, number_of_point, Q1, alpha1, angular_frequency)
+    Zq2 = genZQ(size_number, number_of_point, Q2, alpha2, angular_frequency)
+    Zq3 = genZQ(size_number, number_of_point, Q3, alpha3, angular_frequency)
+
+    sigma = lin_rand(Zw_low, Zw_high, size_number)
+    Zw = genZW(size_number, number_of_point, sigma, angular_frequency)
+
+    Zsum = Zl + Zr0 + \
+           1/(1/Zr1 + 1/Zq1) + \
+           1/(1/Zr2 + 1/Zq2) + \
+           1/(1/(Zr3 + Zw) + 1/Zq3)
+
+    Zparam = []
     for idx in range(size_number):
-        Zparam.append([R0[idx],R1[idx],R2[idx],R3[idx], Q1[idx],Q2[idx],Q3[idx],sigma[idx]])
+        Zparam.append([L[idx], R0[idx], R1[idx], R2[idx], R3[idx],
+                       Q1[idx], Q2[idx], Q3[idx],
+                       alpha1[idx], alpha2[idx], alpha3[idx],
+                       sigma[idx],
+                       tau1[idx], tau2[idx], tau3[idx]])
 
-    return Zsum,np.array(Zparam)
-
+    return Zsum, np.array(Zparam)
 
 ###### Initialize Parameters ######
 np.random.seed(1)

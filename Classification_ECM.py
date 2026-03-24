@@ -22,7 +22,7 @@ print("Num GPUs Available: ", len(tf.config.list_physical_devices('GPU')))
 
 ##### Load EIS data-set #####
 
-filename="xy_data_33k_6circuit_v2.mat"
+filename="xy_data_16k_6circuit_v2.mat"
 
 x=scipy.io.loadmat(filename)["x_data"]
 y=scipy.io.loadmat(filename)["y_data"]
@@ -240,4 +240,3 @@ for idx in range(len(test_list1)):
     if test_list1[idx]==4:c5=c5+1 
     if test_list1[idx]==5:c6=c6+1   
 print(c1,c2,c3,c4,c5,c6)
-
