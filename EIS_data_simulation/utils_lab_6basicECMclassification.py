@@ -820,7 +820,7 @@ np.random.seed(1)
 #Number of circuit:
 number_of_circuit= 6
 #Number of spectrum in each circuit : 256 512 1024 2048 4096 8192 16384 32768 (131072)
-size_number= 16384
+size_number= 163
 #Numer of data point in each spectrum:
 number_of_point= 50  
 #Range of frequency:

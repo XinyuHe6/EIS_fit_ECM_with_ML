@@ -41,5 +41,4 @@ conda run -n tf27 python -c "import tensorflow as tf; print('TF', tf.__version__
 
 
 
-conda run -n tf27 python Classification_ECM.py
-
+conda run -n tf27 python Classification_ECM.py --neglectable-fit-trials 1
