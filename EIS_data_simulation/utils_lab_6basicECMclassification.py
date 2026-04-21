@@ -19,31 +19,31 @@ L_high=0.00001
 tau1_1_low  = 1e-4
 tau1_1_high = 3e-3
 
-tau2_1_low = 5e-4
-tau2_1_high = 2e-3
-tau2_2_low  = 4e-3
+tau2_1_low = 5e-5
+tau2_1_high = 5e-4
+tau2_2_low  = 1e-3
 tau2_2_high = 1e-2
 
-tau3_1_low = 5e-4
-tau3_1_high = 2e-3
-tau3_2_low = 3e-3
-tau3_2_high = 1e-2
-tau3_3_low = 2e-2
-tau3_3_high = 4e-2
+tau3_1_low = 5e-5
+tau3_1_high = 4e-4
+tau3_2_low = 8e-4
+tau3_2_high = 2e-3
+tau3_3_low = 8e-3
+tau3_3_high = 6e-2
 
 tau4_1_low = 2e-4
 tau4_1_high = 2e-3
 
 tau5_1_low = 1e-4
-tau5_1_high = 1.2e-3
-tau5_2_low = 1e-3
+tau5_1_high = 1e-3
+tau5_2_low = 1.2e-3
 tau5_2_high = 8e-3
 
 tau6_1_low = 6e-5
-tau6_1_high = 1e-3
-tau6_2_low = 3e-4
-tau6_2_high = 4e-3
-tau6_3_low = 2.5e-3
+tau6_1_high = 4e-4
+tau6_2_low = 8e-4
+tau6_2_high = 2e-3
+tau6_3_low = 8e-3
 tau6_3_high = 4e-2
 
 ###### Define Essential Elements ######
@@ -820,7 +820,7 @@ np.random.seed(1)
 #Number of circuit:
 number_of_circuit= 6
 #Number of spectrum in each circuit : 256 512 1024 2048 4096 8192 16384 32768 (131072)
-size_number= 163
+size_number= 16384
 #Numer of data point in each spectrum:
 number_of_point= 50  
 #Range of frequency:

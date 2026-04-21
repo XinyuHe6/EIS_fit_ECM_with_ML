@@ -22,9 +22,73 @@ from sklearn.metrics import confusion_matrix, ConfusionMatrixDisplay
 
 from ecm_neglectable_analysis import analyze_misclassified_samples, load_frequency_grid
 
+DEFAULT_DROP_RATE = 0.7
+DEFAULT_HIDDEN_UNITS = (1024, 512, 256)
+DEFAULT_NEGLECTABLE_RMSE_THRESHOLDS = (1e-3, 1e-2)
+
 
 def str_to_bool(value):
     return str(value).strip().lower() in ("1", "true", "yes", "y")
+
+
+def unique_float_sequence(values):
+    ordered_values = []
+    seen = set()
+    for value in values:
+        normalized_value = float(value)
+        normalized_key = np.format_float_positional(normalized_value, trim="-")
+        if normalized_key in seen:
+            continue
+        seen.add(normalized_key)
+        ordered_values.append(normalized_value)
+    return tuple(ordered_values)
+
+
+def parse_thresholds_env(var_name):
+    raw_value = os.getenv(var_name, "").strip()
+    if raw_value == "":
+        return None
+    return unique_float_sequence(
+        float(item.strip())
+        for item in raw_value.split(",")
+        if item.strip() != ""
+    )
+
+
+def resolve_neglectable_rmse_thresholds(args):
+    if args.neglectable_rmse_thresholds:
+        return unique_float_sequence(args.neglectable_rmse_thresholds)
+
+    env_thresholds = parse_thresholds_env("NEGLECTABLE_RMSE_THRESHOLDS")
+    if env_thresholds:
+        return env_thresholds
+
+    if args.neglectable_rmse_threshold != DEFAULT_NEGLECTABLE_RMSE_THRESHOLDS[0]:
+        return unique_float_sequence([args.neglectable_rmse_threshold])
+
+    return DEFAULT_NEGLECTABLE_RMSE_THRESHOLDS
+
+
+def parse_int_sequence_env(var_name):
+    raw_value = os.getenv(var_name, "").strip()
+    if raw_value == "":
+        return None
+    return tuple(
+        int(item.strip())
+        for item in raw_value.split(",")
+        if item.strip() != ""
+    )
+
+
+def resolve_hidden_units(args):
+    if args.hidden_units:
+        return tuple(int(unit) for unit in args.hidden_units)
+
+    env_hidden_units = parse_int_sequence_env("MLP_HIDDEN_UNITS")
+    if env_hidden_units:
+        return env_hidden_units
+
+    return DEFAULT_HIDDEN_UNITS
 
 
 def parse_args():
@@ -78,13 +142,39 @@ def parse_args():
         default=str_to_bool(os.getenv("SAVE_NEGLECTABLE_PLOTS", "0")),
         help="Save per-sample reconstructed EIS plots in addition to CSV outputs.",
     )
+    parser.add_argument(
+        "--neglectable-rmse-thresholds",
+        type=float,
+        nargs="+",
+        default=None,
+        help="RMSE thresholds for running multiple neglectable-misclassification analyses. Defaults to 1e-3 and 1e-2.",
+    )
+    parser.add_argument(
+        "--drop-rate",
+        type=float,
+        default=float(os.getenv("MLP_DROP_RATE", str(DEFAULT_DROP_RATE))),
+        help="Dropout rate for each hidden MLP block.",
+    )
+    parser.add_argument(
+        "--hidden-units",
+        type=int,
+        nargs="+",
+        default=None,
+        help="Hidden dimensions for the MLP, for example: --hidden-units 1024 512 256",
+    )
     args, _ = parser.parse_known_args()
     return args
 
 
 args = parse_args()
+drop_rate = float(args.drop_rate)
+hidden_units = resolve_hidden_units(args)
+neglectable_rmse_thresholds = resolve_neglectable_rmse_thresholds(args)
 
 print("Num GPUs Available: ", len(tf.config.list_physical_devices('GPU')))
+print("MLP drop rate:", drop_rate)
+print("MLP hidden units:", hidden_units)
+print("Neglectable RMSE thresholds:", neglectable_rmse_thresholds)
 
 ##### Load EIS data-set #####
 
@@ -113,10 +203,28 @@ new_x[:,:,5]=x[:,:,2]*-1
 x_train, x_test, y_train, y_test = train_test_split(new_x, y, test_size=0.2, random_state=42)
 
 ##### Model #####
-# drop rate 0.7
+# MLP classifier
+# default drop rate 0.7
+# default hidden units (1024, 512, 256)
 # batch size 1024
 
-Experiment_name="lab6basicECM_Classification_drop07_batch"
+def make_drop_rate_tag(dropout_rate):
+    drop_text = np.format_float_positional(float(dropout_rate), trim="-")
+    return drop_text.replace(".", "")
+
+
+def make_hidden_units_tag(units):
+    return "x".join(str(unit) for unit in units)
+
+
+if drop_rate == DEFAULT_DROP_RATE and hidden_units == DEFAULT_HIDDEN_UNITS:
+    Experiment_name="lab6basicECM_MLP_Classification_drop07_batch"
+else:
+    Experiment_name=(
+        "lab6basicECM_MLP_Classification_"
+        + f"drop{make_drop_rate_tag(drop_rate)}_"
+        + f"h{make_hidden_units_tag(hidden_units)}_batch"
+    )
 fn_tmp=filename.split("xy_data_",1)[1].split(".",1)[0]
 Experiment_path="EIS_"+fn_tmp+"_model_"+Experiment_name
 
@@ -126,43 +234,19 @@ initializer = tf.keras.initializers.HeNormal()
 
 def make_model(input_shape):
     input_layer = keras.layers.Input(input_shape)
-#------------------------------------------------------------------------------
-    conv1d = keras.layers.Conv1D(filters=64, kernel_size=32, 
-                                  padding="same", activation="relu" ,
-                                  kernel_initializer=initializer
-                                 )(input_layer)
+    features = keras.layers.Flatten()(input_layer)
+    features = keras.layers.BatchNormalization()(features)
 
-    conv1d = keras.layers.Conv1D(filters=128, kernel_size=16, 
-                                  padding="same", activation="relu" ,
-                                  kernel_initializer=initializer
-                                 )(conv1d)
-    
-    conv1d = keras.layers.Conv1D(filters=256, kernel_size=8, 
-                                  padding="same", activation="relu" ,
-                                  kernel_initializer=initializer
-                                 )(conv1d)
+    dense = features
+    for units in hidden_units:
+        dense = keras.layers.Dense(
+            units,
+            activation="relu",
+            kernel_initializer=initializer,
+        )(dense)
+        dense = keras.layers.BatchNormalization()(dense)
+        dense = keras.layers.Dropout(drop_rate)(dense)
 
-    conv1d = keras.layers.Conv1D(filters=512, kernel_size=4, 
-                                  padding="same", activation="relu" ,
-                                  kernel_initializer=initializer
-                                 )(conv1d) 
-
-    conv1d = keras.layers.Conv1D(filters=768, kernel_size=2, 
-                                  padding="same", activation="relu" ,
-                                  kernel_initializer=initializer
-                                 )(conv1d) 
-
-#------------------------------------------------------------------------------
-    connector = keras.layers.SpatialDropout1D(0.7)(conv1d)
-    connector = keras.layers.BatchNormalization()(connector)
-    connector = keras.layers.GlobalAveragePooling1D()(connector)
-#------------------------------------------------------------------------------        
-    dense = keras.layers.Dense(1024, 
-                               activation="relu", 
-                               kernel_initializer=initializer,
-                               )(connector)
-    
-#-------------------------------------------------------------------------------
     output_layer = keras.layers.Dense(6, activation="softmax")(dense)
 
     return keras.models.Model(inputs=input_layer, outputs=output_layer)
@@ -341,6 +425,34 @@ def save_confusion_matrix_with_neglectable(
     plt.close(fig)
 
 
+def format_rmse_threshold(rmse_threshold):
+    return np.format_float_positional(float(rmse_threshold), trim="-")
+
+
+def make_rmse_threshold_tag(rmse_threshold):
+    threshold_text = format_rmse_threshold(rmse_threshold)
+    return f"rmse_{threshold_text.replace('.', 'p').replace('-', 'm')}"
+
+
+def build_neglectable_confusion_matrix(summary_df, reference_shape):
+    neglectable_confusion_matrix = np.zeros(reference_shape, dtype=int)
+    neglectable_count = 0
+
+    if "is_neglectable_misclassification" not in summary_df.columns:
+        return neglectable_confusion_matrix, neglectable_count
+
+    neglectable_rows = summary_df[
+        summary_df["is_neglectable_misclassification"].fillna(False).astype(bool)
+    ]
+    neglectable_count = int(len(neglectable_rows))
+    for _, row in neglectable_rows.iterrows():
+        true_idx = int(row["true_label_index"])
+        predicted_idx = int(row["predicted_label_index"])
+        neglectable_confusion_matrix[true_idx, predicted_idx] += 1
+
+    return neglectable_confusion_matrix, neglectable_count
+
+
 save_loss_plot(history, Experiment_path+"/"+"loss.png")
 
 #predict
@@ -411,15 +523,22 @@ if len(misclassified_indices) > 0:
 else:
     print("No misclassified EIS samples found in the evaluation split.")
 
-neglectable_summary_df = pd.DataFrame()
-neglectable_confusion_matrix = np.zeros_like(cm, dtype=int)
-neglectable_count = 0
-neglectable_analysis_error = ""
-accuracy_with_neglectable = None
+save_accuracy_plot(history, Experiment_path+"/"+"accuracy.png")
+df_temp.to_csv(Experiment_path+"/"+"trainig_curve.csv")
 
-if args.skip_neglectable_analysis:
-    print("Skipped neglectable misclassification analysis.")
-elif len(misclassified_indices) > 0:
+raw_metrics_df = pd.DataFrame([{
+    "loss": raw_loss,
+    "accuracy": raw_accuracy,
+    "misclassified_count": int(len(misclassified_indices)),
+}])
+raw_metrics_df.to_csv(Experiment_path+"/"+"classification_metrics.csv", index=False)
+
+threshold_metrics_rows = []
+frequency_grid_error = ""
+angular_freq = None
+freq_hz = None
+
+if not args.skip_neglectable_analysis and len(misclassified_indices) > 0:
     try:
         angular_freq, freq_hz = load_frequency_grid(
             misclassified_original_signal.shape[1],
@@ -427,82 +546,155 @@ elif len(misclassified_indices) > 0:
             freq_min_hz=args.neglectable_freq_min_hz,
             freq_max_hz=args.neglectable_freq_max_hz,
         )
-        neglectable_summary_df = analyze_misclassified_samples(
-            misclassified_df=misclassified_df,
-            original_signals=misclassified_original_signal,
-            angular_freq=angular_freq,
-            freq_hz=freq_hz,
-            output_dir=Experiment_path,
-            rmse_threshold=args.neglectable_rmse_threshold,
-            trial_num=args.neglectable_fit_trials,
-            method=args.neglectable_fit_method,
-            save_plots=args.save_neglectable_plots,
-        )
-        if "is_neglectable_misclassification" in neglectable_summary_df.columns:
-            neglectable_rows = neglectable_summary_df[
-                neglectable_summary_df["is_neglectable_misclassification"].fillna(False).astype(bool)
-            ]
-            neglectable_count = int(len(neglectable_rows))
-            for _, row in neglectable_rows.iterrows():
-                true_idx = int(row["true_label_index"])
-                predicted_idx = int(row["predicted_label_index"])
-                neglectable_confusion_matrix[true_idx, predicted_idx] += 1
-        print("Neglectable misclassifications:", neglectable_count)
-        print(
-            "Neglectable summary file:",
-            Experiment_path+"/"+"neglectable_misclassification_summary.csv",
-        )
     except Exception as exc:
-        neglectable_analysis_error = str(exc)
-        print("[WARN] Neglectable misclassification analysis failed:", neglectable_analysis_error)
+        frequency_grid_error = str(exc)
+        print("[WARN] Failed to load neglectable-analysis frequency grid:", frequency_grid_error)
+
+if args.skip_neglectable_analysis:
+    print("Skipped neglectable misclassification analysis.")
 else:
-    neglectable_count = 0
+    for rmse_threshold in neglectable_rmse_thresholds:
+        threshold_text = format_rmse_threshold(rmse_threshold)
+        threshold_tag = make_rmse_threshold_tag(rmse_threshold)
+        threshold_dir = os.path.join(Experiment_path, f"neglectable_{threshold_tag}")
+        os.makedirs(threshold_dir, exist_ok=True)
 
-if not args.skip_neglectable_analysis and neglectable_analysis_error == "":
-    accuracy_with_neglectable = (int(np.trace(cm)) + neglectable_count) / len(test_list1)
-    adjusted_cm = make_adjusted_confusion_matrix(cm, neglectable_confusion_matrix)
-    adjusted_title = (
-        "Accuracy :"+str(raw_accuracy*100)+"%"
-        +"\n"+"Accuracy + neglectable :"+str(accuracy_with_neglectable*100)+"%"
-        +"\n"+"Neglectable RMSE threshold :"+str(args.neglectable_rmse_threshold)
-    )
-    save_confusion_matrix_with_neglectable(
-        cm,
-        neglectable_confusion_matrix,
-        Experiment_path+"/"+"CMatrix_with_neglectable.png",
-        adjusted_title,
-        label_names,
-    )
-    save_confusion_matrix(
-        adjusted_cm,
-        Experiment_path+"/"+"CMatrix_neglectable_adjusted.png",
-        adjusted_title,
-        label_names,
-    )
+        threshold_summary_df = pd.DataFrame()
+        threshold_summary_file = os.path.join(
+            threshold_dir,
+            f"neglectable_misclassification_summary_{threshold_tag}.csv",
+        )
+        threshold_confusion_matrix = np.zeros_like(cm, dtype=int)
+        threshold_count = 0
+        threshold_error = frequency_grid_error
+        threshold_accuracy_with_neglectable = raw_accuracy
+        threshold_accuracy_plot = os.path.join(threshold_dir, f"accuracy_{threshold_tag}.png")
+        threshold_adjusted_cm_path = ""
+        threshold_neglectable_cm_path = ""
 
-save_accuracy_plot(history, Experiment_path+"/"+"accuracy.png", accuracy_with_neglectable)
-df_temp["val_accuracy_with_neglectable"] = (
-    accuracy_with_neglectable if accuracy_with_neglectable is not None else np.nan
-)
-df_temp["neglectable_misclassification_count"] = neglectable_count
-df_temp["neglectable_rmse_threshold"] = args.neglectable_rmse_threshold
-df_temp.to_csv(Experiment_path+"/"+"trainig_curve.csv")
+        if threshold_error == "" and len(misclassified_indices) > 0:
+            try:
+                threshold_summary_df = analyze_misclassified_samples(
+                    misclassified_df=misclassified_df,
+                    original_signals=misclassified_original_signal,
+                    angular_freq=angular_freq,
+                    freq_hz=freq_hz,
+                    output_dir=threshold_dir,
+                    rmse_threshold=rmse_threshold,
+                    trial_num=args.neglectable_fit_trials,
+                    method=args.neglectable_fit_method,
+                    save_plots=args.save_neglectable_plots,
+                )
+                threshold_summary_df.to_csv(threshold_summary_file, index=False)
+                threshold_confusion_matrix, threshold_count = build_neglectable_confusion_matrix(
+                    threshold_summary_df,
+                    cm.shape,
+                )
+                print(
+                    "Neglectable misclassifications "
+                    + f"(RMSE threshold {threshold_text}): {threshold_count}"
+                )
+                print("Neglectable summary file:", threshold_summary_file)
+            except Exception as exc:
+                threshold_error = str(exc)
+                print(
+                    "[WARN] Neglectable misclassification analysis failed "
+                    + f"for RMSE threshold {threshold_text}: {threshold_error}"
+                )
+        else:
+            threshold_summary_df.to_csv(threshold_summary_file, index=False)
 
-metrics_df = pd.DataFrame([{
-    "loss": raw_loss,
-    "accuracy": raw_accuracy,
-    "misclassified_count": int(len(misclassified_indices)),
-    "neglectable_misclassification_count": int(neglectable_count),
-    "accuracy_with_neglectable": (
-        accuracy_with_neglectable if accuracy_with_neglectable is not None else np.nan
-    ),
-    "neglectable_rmse_threshold": args.neglectable_rmse_threshold,
-    "neglectable_fit_trials": args.neglectable_fit_trials,
-    "neglectable_fit_method": args.neglectable_fit_method,
-    "neglectable_analysis_skipped": bool(args.skip_neglectable_analysis),
-    "neglectable_analysis_error": neglectable_analysis_error,
-}])
-metrics_df.to_csv(Experiment_path+"/"+"classification_metrics_with_neglectable.csv", index=False)
+        if not os.path.exists(threshold_summary_file):
+            threshold_summary_df.to_csv(threshold_summary_file, index=False)
+
+        if threshold_error == "":
+            threshold_accuracy_with_neglectable = (
+                int(np.trace(cm)) + threshold_count
+            ) / len(test_list1)
+            adjusted_cm = make_adjusted_confusion_matrix(cm, threshold_confusion_matrix)
+            adjusted_title = (
+                "Accuracy :"+str(raw_accuracy*100)+"%"
+                +"\n"+"Accuracy + neglectable :"+str(threshold_accuracy_with_neglectable*100)+"%"
+                +"\n"+"Neglectable RMSE threshold :"+threshold_text
+            )
+            threshold_neglectable_cm_path = os.path.join(
+                threshold_dir,
+                f"CMatrix_with_neglectable_{threshold_tag}.png",
+            )
+            threshold_adjusted_cm_path = os.path.join(
+                threshold_dir,
+                f"CMatrix_neglectable_adjusted_{threshold_tag}.png",
+            )
+            save_confusion_matrix_with_neglectable(
+                cm,
+                threshold_confusion_matrix,
+                threshold_neglectable_cm_path,
+                adjusted_title,
+                label_names,
+            )
+            save_confusion_matrix(
+                adjusted_cm,
+                threshold_adjusted_cm_path,
+                adjusted_title,
+                label_names,
+            )
+            save_accuracy_plot(
+                history,
+                threshold_accuracy_plot,
+                threshold_accuracy_with_neglectable,
+            )
+        else:
+            save_accuracy_plot(history, threshold_accuracy_plot)
+
+        threshold_training_curve = df_temp.copy()
+        threshold_training_curve["val_accuracy_with_neglectable"] = (
+            threshold_accuracy_with_neglectable if threshold_error == "" else np.nan
+        )
+        threshold_training_curve["neglectable_misclassification_count"] = threshold_count
+        threshold_training_curve["neglectable_rmse_threshold"] = rmse_threshold
+        threshold_training_curve["neglectable_analysis_error"] = threshold_error
+        threshold_training_curve_path = os.path.join(
+            threshold_dir,
+            f"trainig_curve_{threshold_tag}.csv",
+        )
+        threshold_training_curve.to_csv(threshold_training_curve_path)
+
+        threshold_metrics_row = {
+            "loss": raw_loss,
+            "accuracy": raw_accuracy,
+            "misclassified_count": int(len(misclassified_indices)),
+            "neglectable_misclassification_count": int(threshold_count),
+            "accuracy_with_neglectable": (
+                threshold_accuracy_with_neglectable if threshold_error == "" else np.nan
+            ),
+            "neglectable_rmse_threshold": rmse_threshold,
+            "neglectable_fit_trials": args.neglectable_fit_trials,
+            "neglectable_fit_method": args.neglectable_fit_method,
+            "neglectable_analysis_skipped": False,
+            "neglectable_analysis_error": threshold_error,
+            "output_dir": threshold_dir,
+            "summary_csv": threshold_summary_file,
+            "training_curve_csv": threshold_training_curve_path,
+            "accuracy_plot_png": threshold_accuracy_plot,
+            "confusion_matrix_with_neglectable_png": threshold_neglectable_cm_path,
+            "adjusted_confusion_matrix_png": threshold_adjusted_cm_path,
+        }
+        threshold_metrics_rows.append(threshold_metrics_row)
+
+        threshold_metrics_df = pd.DataFrame([threshold_metrics_row])
+        threshold_metrics_df.to_csv(
+            os.path.join(
+                threshold_dir,
+                f"classification_metrics_with_neglectable_{threshold_tag}.csv",
+            ),
+            index=False,
+        )
+
+if threshold_metrics_rows:
+    pd.DataFrame(threshold_metrics_rows).to_csv(
+        Experiment_path+"/"+"classification_metrics_with_neglectable.csv",
+        index=False,
+    )
 
 c1,c2,c3,c4,c5,c6=0,0,0,0,0,0
 for idx in range(len(test_list1)):
