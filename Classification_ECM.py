@@ -22,9 +22,14 @@ from sklearn.metrics import confusion_matrix, ConfusionMatrixDisplay
 
 from ecm_neglectable_analysis import analyze_misclassified_samples, load_frequency_grid
 
-DEFAULT_DROP_RATE = 0.7
-DEFAULT_HIDDEN_UNITS = (1024, 512, 256)
+DEFAULT_DROP_RATE = 0.35
+DEFAULT_CONV_FILTERS = (32, 64, 128)
+DEFAULT_DENSE_UNITS = 128
+DEFAULT_LEARNING_RATE = 1e-3
+DEFAULT_BATCH_SIZE = 256
+DEFAULT_EPOCHS = 200
 DEFAULT_NEGLECTABLE_RMSE_THRESHOLDS = (1e-3, 1e-2)
+LABEL_NAMES = np.array(["C1", "C2", "C3", "C4", "C5", "C6"])
 
 
 def str_to_bool(value):
@@ -80,15 +85,15 @@ def parse_int_sequence_env(var_name):
     )
 
 
-def resolve_hidden_units(args):
-    if args.hidden_units:
-        return tuple(int(unit) for unit in args.hidden_units)
+def resolve_conv_filters(args):
+    if args.conv_filters:
+        return tuple(int(filters) for filters in args.conv_filters)
 
-    env_hidden_units = parse_int_sequence_env("MLP_HIDDEN_UNITS")
-    if env_hidden_units:
-        return env_hidden_units
+    env_filters = parse_int_sequence_env("CNN_CONV_FILTERS")
+    if env_filters:
+        return env_filters
 
-    return DEFAULT_HIDDEN_UNITS
+    return DEFAULT_CONV_FILTERS
 
 
 def parse_args():
@@ -152,15 +157,39 @@ def parse_args():
     parser.add_argument(
         "--drop-rate",
         type=float,
-        default=float(os.getenv("MLP_DROP_RATE", str(DEFAULT_DROP_RATE))),
-        help="Dropout rate for each hidden MLP block.",
+        default=float(os.getenv("CNN_DROP_RATE", str(DEFAULT_DROP_RATE))),
+        help="Dropout rate for the 2D-CNN classifier head.",
     )
     parser.add_argument(
-        "--hidden-units",
+        "--conv-filters",
         type=int,
         nargs="+",
         default=None,
-        help="Hidden dimensions for the MLP, for example: --hidden-units 1024 512 256",
+        help="Conv2D filters for each CNN block, for example: --conv-filters 32 64 128",
+    )
+    parser.add_argument(
+        "--dense-units",
+        type=int,
+        default=int(os.getenv("CNN_DENSE_UNITS", str(DEFAULT_DENSE_UNITS))),
+        help="Dense units after the convolution blocks.",
+    )
+    parser.add_argument(
+        "--learning-rate",
+        type=float,
+        default=float(os.getenv("CNN_LEARNING_RATE", str(DEFAULT_LEARNING_RATE))),
+        help="Adam learning rate for the 2D-CNN classifier.",
+    )
+    parser.add_argument(
+        "--batch-size",
+        type=int,
+        default=int(os.getenv("CNN_BATCH_SIZE", str(DEFAULT_BATCH_SIZE))),
+        help="Mini-batch size for training.",
+    )
+    parser.add_argument(
+        "--epochs",
+        type=int,
+        default=int(os.getenv("CNN_EPOCHS", str(DEFAULT_EPOCHS))),
+        help="Maximum number of training epochs.",
     )
     args, _ = parser.parse_known_args()
     return args
@@ -168,13 +197,22 @@ def parse_args():
 
 args = parse_args()
 drop_rate = float(args.drop_rate)
-hidden_units = resolve_hidden_units(args)
+conv_filters = resolve_conv_filters(args)
+dense_units = int(args.dense_units)
+learning_rate = float(args.learning_rate)
+batch_size = int(args.batch_size)
+epochs = int(args.epochs)
 neglectable_rmse_thresholds = resolve_neglectable_rmse_thresholds(args)
 
 print("Num GPUs Available: ", len(tf.config.list_physical_devices('GPU')))
-print("MLP drop rate:", drop_rate)
-print("MLP hidden units:", hidden_units)
+print("2D-CNN drop rate:", drop_rate)
+print("2D-CNN conv filters:", conv_filters)
+print("2D-CNN dense units:", dense_units)
+print("2D-CNN learning rate:", learning_rate)
+print("2D-CNN batch size:", batch_size)
+print("2D-CNN epochs:", epochs)
 print("Neglectable RMSE thresholds:", neglectable_rmse_thresholds)
+
 
 ##### Load EIS data-set #####
 
@@ -183,48 +221,58 @@ filename="xy_data_16k_6circuit_v2.mat"
 x=scipy.io.loadmat(filename)["x_data"]
 y=scipy.io.loadmat(filename)["y_data"]
 y=np.squeeze(y)
-x=np.swapaxes(x, 1, 2)
+x=np.swapaxes(x, 1, 2).astype(np.float32)
 y=tf.keras.utils.to_categorical(y)
 
+x_train_raw, x_test_raw, y_train, y_test = train_test_split(
+    x,
+    y,
+    test_size=0.2,
+    random_state=42,
+)
+feature_names = tuple(f"feature_{idx + 1:02d}" for idx in range(x_train_raw.shape[2]))
 
-# Data Augmentation
-new_shape=x.shape
-new_shape=np. asarray(new_shape)
-new_shape[-1]=new_shape[-1]+3
-new_shape=tuple(new_shape)
-new_x = np.zeros(new_shape)
-new_x[:, :, :3] = x
+feature_mean = x_train_raw.mean(axis=(0, 1), keepdims=True)
+feature_std = x_train_raw.std(axis=(0, 1), keepdims=True)
+feature_std = np.where(feature_std < 1e-12, 1.0, feature_std)
 
-new_x[:,:,3]=x[:,:,0]*-1
-new_x[:,:,4]=x[:,:,1]*-1
-new_x[:,:,5]=x[:,:,2]*-1
+x_train = ((x_train_raw - feature_mean) / feature_std).astype(np.float32)[..., np.newaxis]
+x_test = ((x_test_raw - feature_mean) / feature_std).astype(np.float32)[..., np.newaxis]
 
-#Split data
-x_train, x_test, y_train, y_test = train_test_split(new_x, y, test_size=0.2, random_state=42)
+print("Using x_data as-is; no layout detection or feature conversion is applied.")
+print("2D-CNN input shape:", x_train.shape[1:])
+print("Raw sample shape before channel expansion:", x_train_raw.shape[1:])
 
 ##### Model #####
-# MLP classifier
-# default drop rate 0.7
-# default hidden units (1024, 512, 256)
-# batch size 1024
+# 2D-CNN classifier
+# default drop rate 0.35
+# default conv filters (32, 64, 128)
+# default dense units 128
+# default learning rate 1e-3
+# default batch size 256
+# default epochs 200
 
 def make_drop_rate_tag(dropout_rate):
     drop_text = np.format_float_positional(float(dropout_rate), trim="-")
     return drop_text.replace(".", "")
 
 
-def make_hidden_units_tag(units):
-    return "x".join(str(unit) for unit in units)
+def make_conv_filters_tag(filters):
+    return "x".join(str(filters_per_block) for filters_per_block in filters)
 
 
-if drop_rate == DEFAULT_DROP_RATE and hidden_units == DEFAULT_HIDDEN_UNITS:
-    Experiment_name="lab6basicECM_MLP_Classification_drop07_batch"
-else:
-    Experiment_name=(
-        "lab6basicECM_MLP_Classification_"
-        + f"drop{make_drop_rate_tag(drop_rate)}_"
-        + f"h{make_hidden_units_tag(hidden_units)}_batch"
-    )
+def make_learning_rate_tag(value):
+    learning_rate_text = np.format_float_positional(float(value), trim="-")
+    return learning_rate_text.replace(".", "p")
+
+
+Experiment_name=(
+    "lab6basicECM_2DCNN_Classification_"
+    + f"f{make_conv_filters_tag(conv_filters)}_"
+    + f"d{dense_units}_"
+    + f"drop{make_drop_rate_tag(drop_rate)}_"
+    + f"lr{make_learning_rate_tag(learning_rate)}_batch"
+)
 fn_tmp=filename.split("xy_data_",1)[1].split(".",1)[0]
 Experiment_path="EIS_"+fn_tmp+"_model_"+Experiment_name
 
@@ -234,34 +282,67 @@ initializer = tf.keras.initializers.HeNormal()
 
 def make_model(input_shape):
     input_layer = keras.layers.Input(input_shape)
-    features = keras.layers.Flatten()(input_layer)
-    features = keras.layers.BatchNormalization()(features)
+    features = input_layer
+    block_dropout_rate = min(drop_rate * 0.5, 0.2)
 
-    dense = features
-    for units in hidden_units:
-        dense = keras.layers.Dense(
-            units,
-            activation="relu",
+    for block_idx, filters in enumerate(conv_filters):
+        primary_kernel = (5, 3) if block_idx == 0 else (3, 1)
+        features = keras.layers.Conv2D(
+            filters,
+            primary_kernel,
+            padding="same",
+            use_bias=False,
             kernel_initializer=initializer,
-        )(dense)
-        dense = keras.layers.BatchNormalization()(dense)
-        dense = keras.layers.Dropout(drop_rate)(dense)
+        )(features)
+        features = keras.layers.BatchNormalization()(features)
+        features = keras.layers.Activation("relu")(features)
 
-    output_layer = keras.layers.Dense(6, activation="softmax")(dense)
+        features = keras.layers.Conv2D(
+            filters,
+            (3, 1),
+            padding="same",
+            use_bias=False,
+            kernel_initializer=initializer,
+        )(features)
+        features = keras.layers.BatchNormalization()(features)
+        features = keras.layers.Activation("relu")(features)
+        features = keras.layers.MaxPooling2D(pool_size=(2, 1))(features)
+
+        if block_idx < len(conv_filters) - 1:
+            features = keras.layers.Dropout(block_dropout_rate)(features)
+
+    features = keras.layers.GlobalAveragePooling2D()(features)
+    features = keras.layers.Dense(
+        dense_units,
+        use_bias=False,
+        kernel_initializer=initializer,
+    )(features)
+    features = keras.layers.BatchNormalization()(features)
+    features = keras.layers.Activation("relu")(features)
+    features = keras.layers.Dropout(drop_rate)(features)
+
+    output_layer = keras.layers.Dense(len(LABEL_NAMES), activation="softmax")(features)
 
     return keras.models.Model(inputs=input_layer, outputs=output_layer)
 
 model = make_model(input_shape=x_train.shape[1:])
 #Model Summarize
-print(model.summary())
+model.summary()
 #keras.utils.plot_model(model, show_shapes=True)
 
 ##### Training #####
-epochs = 400
-batch_size = 1024
 Experiment_path=Experiment_path+"_"+str(batch_size) 
 print(Experiment_path)
 os.makedirs(Experiment_path, exist_ok=True)
+
+feature_stats_df = pd.DataFrame(
+    {
+        "feature": feature_names,
+        "train_mean": feature_mean.reshape(-1),
+        "train_std": feature_std.reshape(-1),
+    }
+)
+feature_stats_df.to_csv(Experiment_path+"/"+"input_feature_stats.csv", index=False)
 
 
 log_dir = "logs/fit/" + datetime.datetime.now().strftime("%y_%m_%d") + "/" \
@@ -284,19 +365,23 @@ callbacks =[
                 ),
             
             keras.callbacks.ReduceLROnPlateau(
-                monitor='val_loss', factor=0.5, patience=20, verbose=0,
+                monitor='val_loss', factor=0.5, patience=10, verbose=0,
                 mode='min', min_lr=0.000001
                 ),
             
-            # keras.callbacks.EarlyStopping(monitor="val_loss", patience=60, 
-            #                                verbose=1),
+            keras.callbacks.EarlyStopping(
+                monitor="val_loss",
+                patience=30,
+                restore_best_weights=True,
+                verbose=1,
+            ),
             
             #TqdmCallback(verbose=0),
             tensorboard_callback,         
            ]
 
 model.compile(
-              optimizer="adam",
+              optimizer=keras.optimizers.Adam(learning_rate=learning_rate),
               loss="categorical_crossentropy",
               metrics=["accuracy"],
              )
@@ -460,12 +545,13 @@ predict_model = model
 
 x_t= x_test
 y_t= y_test
+x_t_raw = x_test_raw
 # x_t= x_train
 # y_t= y_train
 
 m_ev=predict_model.evaluate(x_t,y_t)
 y_pred=predict_model.predict(x_t)
-label_names = np.array(["C1", "C2", "C3", "C4", "C5", "C6"])
+label_names = LABEL_NAMES
 y_pred_class = np.argmax(y_pred, axis=1).astype(int)
 y_test_class = np.argmax(y_t, axis=1).astype(int)
 test_list2=y_pred_class
@@ -481,10 +567,10 @@ save_confusion_matrix(cm, Experiment_path+"/"+"CMatrix.png", raw_title, label_na
 misclassified_mask = y_test_class != y_pred_class
 misclassified_indices = np.where(misclassified_mask)[0]
 misclassified_df = pd.DataFrame()
-misclassified_original_signal = np.empty((0, x_t.shape[1], 3))
+misclassified_original_signal = np.empty((0, x_t_raw.shape[1], min(3, x_t_raw.shape[2])), dtype=np.float32)
 
 if len(misclassified_indices) > 0:
-    misclassified_x = x_t[misclassified_indices]
+    misclassified_x_raw = x_t_raw[misclassified_indices]
     misclassified_true = y_t[misclassified_indices]
     misclassified_pred = y_pred[misclassified_indices]
     misclassified_true_class = y_test_class[misclassified_indices].astype(int)
@@ -510,12 +596,13 @@ if len(misclassified_indices) > 0:
         misclassified_df[f"true_onehot_{class_name}"] = misclassified_true[:, class_idx]
         misclassified_df[f"pred_softmax_{class_name}"] = misclassified_pred[:, class_idx]
 
-    misclassified_original_signal = misclassified_x[:, :, :3]
-    for point_idx in range(misclassified_original_signal.shape[1]):
+    misclassified_original_signal = misclassified_x_raw[:, :, :3].astype(np.float32)
+    for point_idx in range(misclassified_x_raw.shape[1]):
         point_num = point_idx + 1
-        misclassified_df[f"imag_pt_{point_num:02d}"] = misclassified_original_signal[:, point_idx, 0]
-        misclassified_df[f"phase_pt_{point_num:02d}"] = misclassified_original_signal[:, point_idx, 1]
-        misclassified_df[f"mag_pt_{point_num:02d}"] = misclassified_original_signal[:, point_idx, 2]
+        for feature_idx, feature_name in enumerate(feature_names):
+            misclassified_df[f"{feature_name}_pt_{point_num:02d}"] = misclassified_x_raw[
+                :, point_idx, feature_idx
+            ]
 
     misclassified_df.to_csv(Experiment_path+"/"+"misclassified_EIS.csv", index=False)
     print("Saved misclassified EIS samples:", len(misclassified_indices))
@@ -527,6 +614,15 @@ save_accuracy_plot(history, Experiment_path+"/"+"accuracy.png")
 df_temp.to_csv(Experiment_path+"/"+"trainig_curve.csv")
 
 raw_metrics_df = pd.DataFrame([{
+    "model_type": "2D-CNN",
+    "input_layout": f"{x_train_raw.shape[1]}x{x_train_raw.shape[2]}x1 raw x_data as-is",
+    "input_features": ",".join(feature_names),
+    "conv_filters": "x".join(str(filters) for filters in conv_filters),
+    "dense_units": int(dense_units),
+    "drop_rate": float(drop_rate),
+    "learning_rate": float(learning_rate),
+    "batch_size": int(batch_size),
+    "epochs": int(epochs),
     "loss": raw_loss,
     "accuracy": raw_accuracy,
     "misclassified_count": int(len(misclassified_indices)),
@@ -539,16 +635,24 @@ angular_freq = None
 freq_hz = None
 
 if not args.skip_neglectable_analysis and len(misclassified_indices) > 0:
-    try:
-        angular_freq, freq_hz = load_frequency_grid(
-            misclassified_original_signal.shape[1],
-            freq_file=args.neglectable_freq_file,
-            freq_min_hz=args.neglectable_freq_min_hz,
-            freq_max_hz=args.neglectable_freq_max_hz,
+    if x_t_raw.shape[2] < 3:
+        frequency_grid_error = "Neglectable analysis requires at least 3 raw features per point."
+        print("[WARN]", frequency_grid_error)
+    else:
+        print(
+            "[INFO] Neglectable analysis will use the first 3 raw input features "
+            "as (imaginary, phase_deg, magnitude)."
         )
-    except Exception as exc:
-        frequency_grid_error = str(exc)
-        print("[WARN] Failed to load neglectable-analysis frequency grid:", frequency_grid_error)
+        try:
+            angular_freq, freq_hz = load_frequency_grid(
+                x_t_raw.shape[1],
+                freq_file=args.neglectable_freq_file,
+                freq_min_hz=args.neglectable_freq_min_hz,
+                freq_max_hz=args.neglectable_freq_max_hz,
+            )
+        except Exception as exc:
+            frequency_grid_error = str(exc)
+            print("[WARN] Failed to load neglectable-analysis frequency grid:", frequency_grid_error)
 
 if args.skip_neglectable_analysis:
     print("Skipped neglectable misclassification analysis.")
