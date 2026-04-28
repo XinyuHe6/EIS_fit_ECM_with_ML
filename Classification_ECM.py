@@ -30,11 +30,27 @@ DEFAULT_BATCH_SIZE = 256
 DEFAULT_EPOCHS = 200
 DEFAULT_NEGLECTABLE_RMSE_THRESHOLDS = (1e-3, 1e-2)
 DEFAULT_INPUT_SIGNAL_LAYOUT = "frequency_imag_real"
+DEFAULT_MODEL_INPUT_LAYOUT = "frequency_imag_real"
 LABEL_NAMES = np.array(["C1", "C2", "C3", "C4", "C5", "C6"])
 FEATURE_NAMES_BY_LAYOUT = {
     "frequency_imag_real": ("freq", "imag", "real"),
+    "frequency_imag_real_magnitude": ("freq", "imag", "real", "magnitude"),
+    "frequency_imag_real_phase": ("freq", "imag", "real", "phase_deg"),
+    "frequency_imag_real_magnitude_phase": (
+        "freq",
+        "imag",
+        "real",
+        "magnitude",
+        "phase_deg",
+    ),
     "imag_phase_mag": ("imag", "phase", "mag"),
 }
+MODEL_INPUT_LAYOUTS = (
+    "frequency_imag_real",
+    "frequency_imag_real_phase",
+    "frequency_imag_real_magnitude",
+    "frequency_imag_real_magnitude_phase",
+)
 
 
 def str_to_bool(value):
@@ -163,8 +179,15 @@ def parse_args():
         "--input-signal-layout",
         type=str,
         default=os.getenv("EIS_INPUT_SIGNAL_LAYOUT", DEFAULT_INPUT_SIGNAL_LAYOUT),
-        choices=sorted(FEATURE_NAMES_BY_LAYOUT),
-        help="Layout of the 3 raw EIS input channels.",
+        choices=("frequency_imag_real", "imag_phase_mag"),
+        help="Layout of the 3 raw EIS channels saved in x_data.",
+    )
+    parser.add_argument(
+        "--model-input-layout",
+        type=str,
+        default=os.getenv("EIS_MODEL_INPUT_LAYOUT", DEFAULT_MODEL_INPUT_LAYOUT),
+        choices=MODEL_INPUT_LAYOUTS,
+        help="Feature layout passed to the 2D-CNN after optional derived-channel construction.",
     )
     parser.add_argument(
         "--drop-rate",
@@ -224,7 +247,8 @@ print("2D-CNN learning rate:", learning_rate)
 print("2D-CNN batch size:", batch_size)
 print("2D-CNN epochs:", epochs)
 print("Neglectable pointwise relative RMSE thresholds:", neglectable_rmse_thresholds)
-print("Input signal layout:", args.input_signal_layout)
+print("Raw input signal layout:", args.input_signal_layout)
+print("2D-CNN model input layout:", args.model_input_layout)
 
 
 ##### Load EIS data-set #####
@@ -237,16 +261,60 @@ y=np.squeeze(y)
 x=np.swapaxes(x, 1, 2).astype(np.float32)
 y=tf.keras.utils.to_categorical(y)
 
+
+def build_model_input_signal(raw_signal, raw_layout, model_layout):
+    if raw_layout != "frequency_imag_real":
+        if model_layout == raw_layout:
+            return raw_signal.astype(np.float32), FEATURE_NAMES_BY_LAYOUT[raw_layout]
+        raise ValueError(
+            f"{model_layout} model input can only be derived from raw "
+            "frequency_imag_real x_data."
+        )
+
+    if raw_signal.shape[2] < 3:
+        raise ValueError("frequency_imag_real x_data requires at least 3 channels.")
+
+    freq_imag_real = raw_signal[:, :, :3].astype(np.float32)
+    if model_layout == "frequency_imag_real":
+        return freq_imag_real, FEATURE_NAMES_BY_LAYOUT[model_layout]
+
+    imag = freq_imag_real[:, :, 1]
+    real = freq_imag_real[:, :, 2]
+    derived_channels = []
+
+    if model_layout in (
+        "frequency_imag_real_magnitude",
+        "frequency_imag_real_magnitude_phase",
+    ):
+        magnitude = np.hypot(real, imag).astype(np.float32)
+        derived_channels.append(magnitude[:, :, np.newaxis])
+
+    if model_layout in (
+        "frequency_imag_real_phase",
+        "frequency_imag_real_magnitude_phase",
+    ):
+        phase = np.degrees(np.arctan2(imag, real)).astype(np.float32)
+        derived_channels.append(phase[:, :, np.newaxis])
+
+    if not derived_channels:
+        raise ValueError(f"Unsupported model input layout: {model_layout}")
+
+    model_signal = np.concatenate([freq_imag_real] + derived_channels, axis=2)
+    return model_signal.astype(np.float32), FEATURE_NAMES_BY_LAYOUT[model_layout]
+
+
+x, feature_names = build_model_input_signal(
+    x,
+    raw_layout=args.input_signal_layout,
+    model_layout=args.model_input_layout,
+)
+
 x_train_raw, x_test_raw, y_train, y_test = train_test_split(
     x,
     y,
     test_size=0.2,
     random_state=42,
 )
-if x_train_raw.shape[2] == 3:
-    feature_names = FEATURE_NAMES_BY_LAYOUT[args.input_signal_layout]
-else:
-    feature_names = tuple(f"feature_{idx + 1:02d}" for idx in range(x_train_raw.shape[2]))
 
 feature_mean = x_train_raw.mean(axis=(0, 1), keepdims=True)
 feature_std = x_train_raw.std(axis=(0, 1), keepdims=True)
@@ -255,9 +323,10 @@ feature_std = np.where(feature_std < 1e-12, 1.0, feature_std)
 x_train = ((x_train_raw - feature_mean) / feature_std).astype(np.float32)[..., np.newaxis]
 x_test = ((x_test_raw - feature_mean) / feature_std).astype(np.float32)[..., np.newaxis]
 
-print("Using x_data as-is; no layout detection or feature conversion is applied.")
+print("Built 2D-CNN input from raw x_data.")
 print("2D-CNN input shape:", x_train.shape[1:])
 print("Raw sample shape before channel expansion:", x_train_raw.shape[1:])
+print("2D-CNN input features:", feature_names)
 
 ##### Model #####
 # 2D-CNN classifier
@@ -284,6 +353,7 @@ def make_learning_rate_tag(value):
 
 Experiment_name=(
     "lab6basicECM_2DCNN_Classification_"
+    + f"{args.model_input_layout}_"
     + f"f{make_conv_filters_tag(conv_filters)}_"
     + f"d{dense_units}_"
     + f"drop{make_drop_rate_tag(drop_rate)}_"
@@ -631,7 +701,9 @@ df_temp.to_csv(Experiment_path+"/"+"trainig_curve.csv")
 
 raw_metrics_df = pd.DataFrame([{
     "model_type": "2D-CNN",
-    "input_layout": f"{x_train_raw.shape[1]}x{x_train_raw.shape[2]}x1 raw x_data as-is",
+    "raw_input_layout": args.input_signal_layout,
+    "model_input_layout": args.model_input_layout,
+    "input_layout": f"{x_train_raw.shape[1]}x{x_train_raw.shape[2]}x1 {args.model_input_layout}",
     "input_features": ",".join(feature_names),
     "conv_filters": "x".join(str(filters) for filters in conv_filters),
     "dense_units": int(dense_units),
