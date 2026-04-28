@@ -29,7 +29,12 @@ DEFAULT_LEARNING_RATE = 1e-3
 DEFAULT_BATCH_SIZE = 256
 DEFAULT_EPOCHS = 200
 DEFAULT_NEGLECTABLE_RMSE_THRESHOLDS = (1e-3, 1e-2)
+DEFAULT_INPUT_SIGNAL_LAYOUT = "frequency_imag_real"
 LABEL_NAMES = np.array(["C1", "C2", "C3", "C4", "C5", "C6"])
+FEATURE_NAMES_BY_LAYOUT = {
+    "frequency_imag_real": ("freq", "imag", "real"),
+    "imag_phase_mag": ("imag", "phase", "mag"),
+}
 
 
 def str_to_bool(value):
@@ -102,7 +107,7 @@ def parse_args():
         "--neglectable-rmse-threshold",
         type=float,
         default=float(os.getenv("NEGLECTABLE_RMSE_THRESHOLD", "1e-3")),
-        help="RMSE threshold for counting different ECM reconstructions as neglectable.",
+        help="Pointwise relative RMSE threshold for counting different ECM reconstructions as neglectable.",
     )
     parser.add_argument(
         "--neglectable-fit-trials",
@@ -152,7 +157,14 @@ def parse_args():
         type=float,
         nargs="+",
         default=None,
-        help="RMSE thresholds for running multiple neglectable-misclassification analyses. Defaults to 1e-3 and 1e-2.",
+        help="Pointwise relative RMSE thresholds for running multiple neglectable-misclassification analyses. Defaults to 1e-3 and 1e-2.",
+    )
+    parser.add_argument(
+        "--input-signal-layout",
+        type=str,
+        default=os.getenv("EIS_INPUT_SIGNAL_LAYOUT", DEFAULT_INPUT_SIGNAL_LAYOUT),
+        choices=sorted(FEATURE_NAMES_BY_LAYOUT),
+        help="Layout of the 3 raw EIS input channels.",
     )
     parser.add_argument(
         "--drop-rate",
@@ -211,7 +223,8 @@ print("2D-CNN dense units:", dense_units)
 print("2D-CNN learning rate:", learning_rate)
 print("2D-CNN batch size:", batch_size)
 print("2D-CNN epochs:", epochs)
-print("Neglectable RMSE thresholds:", neglectable_rmse_thresholds)
+print("Neglectable pointwise relative RMSE thresholds:", neglectable_rmse_thresholds)
+print("Input signal layout:", args.input_signal_layout)
 
 
 ##### Load EIS data-set #####
@@ -230,7 +243,10 @@ x_train_raw, x_test_raw, y_train, y_test = train_test_split(
     test_size=0.2,
     random_state=42,
 )
-feature_names = tuple(f"feature_{idx + 1:02d}" for idx in range(x_train_raw.shape[2]))
+if x_train_raw.shape[2] == 3:
+    feature_names = FEATURE_NAMES_BY_LAYOUT[args.input_signal_layout]
+else:
+    feature_names = tuple(f"feature_{idx + 1:02d}" for idx in range(x_train_raw.shape[2]))
 
 feature_mean = x_train_raw.mean(axis=(0, 1), keepdims=True)
 feature_std = x_train_raw.std(axis=(0, 1), keepdims=True)
@@ -641,7 +657,7 @@ if not args.skip_neglectable_analysis and len(misclassified_indices) > 0:
     else:
         print(
             "[INFO] Neglectable analysis will use the first 3 raw input features "
-            "as (imaginary, phase_deg, magnitude)."
+            f"as {FEATURE_NAMES_BY_LAYOUT[args.input_signal_layout]}."
         )
         try:
             angular_freq, freq_hz = load_frequency_grid(
@@ -688,6 +704,7 @@ else:
                     trial_num=args.neglectable_fit_trials,
                     method=args.neglectable_fit_method,
                     save_plots=args.save_neglectable_plots,
+                    signal_layout=args.input_signal_layout,
                 )
                 threshold_summary_df.to_csv(threshold_summary_file, index=False)
                 threshold_confusion_matrix, threshold_count = build_neglectable_confusion_matrix(
@@ -696,14 +713,14 @@ else:
                 )
                 print(
                     "Neglectable misclassifications "
-                    + f"(RMSE threshold {threshold_text}): {threshold_count}"
+                    + f"(pointwise relative RMSE threshold {threshold_text}): {threshold_count}"
                 )
                 print("Neglectable summary file:", threshold_summary_file)
             except Exception as exc:
                 threshold_error = str(exc)
                 print(
                     "[WARN] Neglectable misclassification analysis failed "
-                    + f"for RMSE threshold {threshold_text}: {threshold_error}"
+                    + f"for pointwise relative RMSE threshold {threshold_text}: {threshold_error}"
                 )
         else:
             threshold_summary_df.to_csv(threshold_summary_file, index=False)
@@ -719,7 +736,7 @@ else:
             adjusted_title = (
                 "Accuracy :"+str(raw_accuracy*100)+"%"
                 +"\n"+"Accuracy + neglectable :"+str(threshold_accuracy_with_neglectable*100)+"%"
-                +"\n"+"Neglectable RMSE threshold :"+threshold_text
+                +"\n"+"Neglectable relative RMSE threshold :"+threshold_text
             )
             threshold_neglectable_cm_path = os.path.join(
                 threshold_dir,
@@ -756,6 +773,7 @@ else:
         )
         threshold_training_curve["neglectable_misclassification_count"] = threshold_count
         threshold_training_curve["neglectable_rmse_threshold"] = rmse_threshold
+        threshold_training_curve["neglectable_rmse_threshold_type"] = "pointwise_relative"
         threshold_training_curve["neglectable_analysis_error"] = threshold_error
         threshold_training_curve_path = os.path.join(
             threshold_dir,
@@ -772,6 +790,7 @@ else:
                 threshold_accuracy_with_neglectable if threshold_error == "" else np.nan
             ),
             "neglectable_rmse_threshold": rmse_threshold,
+            "neglectable_rmse_threshold_type": "pointwise_relative",
             "neglectable_fit_trials": args.neglectable_fit_trials,
             "neglectable_fit_method": args.neglectable_fit_method,
             "neglectable_analysis_skipped": False,

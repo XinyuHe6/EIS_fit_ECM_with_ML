@@ -158,10 +158,18 @@ def load_frequency_grid(num_points, freq_file="angular_freq.csv", freq_min_hz=0.
     return angular_freq, freq_hz
 
 
-def reconstruct_impedance_from_signal(original_signal):
-    phase_deg = original_signal[:, 1].astype(float)
-    magnitude = original_signal[:, 2].astype(float)
-    return magnitude * np.exp(1j * np.deg2rad(phase_deg))
+def reconstruct_impedance_from_signal(original_signal, signal_layout="imag_phase_mag"):
+    if signal_layout == "frequency_imag_real":
+        imag = original_signal[:, 1].astype(float)
+        real = original_signal[:, 2].astype(float)
+        return real + 1j * imag
+
+    if signal_layout == "imag_phase_mag":
+        phase_deg = original_signal[:, 1].astype(float)
+        magnitude = original_signal[:, 2].astype(float)
+        return magnitude * np.exp(1j * np.deg2rad(phase_deg))
+
+    raise ValueError(f"Unsupported signal layout: {signal_layout}")
 
 
 def complex_rmse(z_a, z_b):
@@ -170,8 +178,10 @@ def complex_rmse(z_a, z_b):
 
 def difference_metrics(z_a, z_b):
     abs_diff = np.abs(z_a - z_b)
+    pointwise_relative_diff = abs_diff / np.maximum(np.abs(z_a), 1e-12)
     return {
         "rmse_complex": float(np.sqrt(np.mean(abs_diff ** 2))),
+        "relative_rmse_complex": float(np.sqrt(np.mean(pointwise_relative_diff ** 2))),
         "mae_complex": float(np.mean(abs_diff)),
         "max_abs_complex": float(np.max(abs_diff)),
         "rmse_real": float(np.sqrt(np.mean((z_a.real - z_b.real) ** 2))),
@@ -412,28 +422,53 @@ def expand_params(ecm_name, params):
     return expanded
 
 
-def build_detail_dataframe(freq_hz, angular_freq, original_signal, z_meas, z_true_fit, z_predicted_fit):
-    return pd.DataFrame(
-        {
-            "freq_hz": freq_hz,
-            "angular_freq": angular_freq,
-            "raw_signal_imag": original_signal[:, 0],
-            "raw_signal_phase_deg": original_signal[:, 1],
-            "raw_signal_magnitude": original_signal[:, 2],
-            "measured_real": z_meas.real,
-            "measured_imag": z_meas.imag,
-            "measured_neg_imag": -z_meas.imag,
-            "true_ecm_fit_real": z_true_fit.real,
-            "true_ecm_fit_imag": z_true_fit.imag,
-            "true_ecm_fit_neg_imag": -z_true_fit.imag,
-            "predicted_ecm_fit_real": z_predicted_fit.real,
-            "predicted_ecm_fit_imag": z_predicted_fit.imag,
-            "predicted_ecm_fit_neg_imag": -z_predicted_fit.imag,
-            "abs_diff_measured_vs_true_fit": np.abs(z_meas - z_true_fit),
-            "abs_diff_measured_vs_predicted_fit": np.abs(z_meas - z_predicted_fit),
-            "abs_diff_true_fit_vs_predicted_fit": np.abs(z_true_fit - z_predicted_fit),
-        }
-    )
+def build_detail_dataframe(
+    freq_hz,
+    angular_freq,
+    original_signal,
+    z_meas,
+    z_true_fit,
+    z_predicted_fit,
+    signal_layout="imag_phase_mag",
+):
+    detail_data = {
+        "freq_hz": freq_hz,
+        "angular_freq": angular_freq,
+        "raw_signal_ch0": original_signal[:, 0],
+        "raw_signal_ch1": original_signal[:, 1],
+        "raw_signal_ch2": original_signal[:, 2],
+        "measured_real": z_meas.real,
+        "measured_imag": z_meas.imag,
+        "measured_neg_imag": -z_meas.imag,
+        "true_ecm_fit_real": z_true_fit.real,
+        "true_ecm_fit_imag": z_true_fit.imag,
+        "true_ecm_fit_neg_imag": -z_true_fit.imag,
+        "predicted_ecm_fit_real": z_predicted_fit.real,
+        "predicted_ecm_fit_imag": z_predicted_fit.imag,
+        "predicted_ecm_fit_neg_imag": -z_predicted_fit.imag,
+        "abs_diff_measured_vs_true_fit": np.abs(z_meas - z_true_fit),
+        "abs_diff_measured_vs_predicted_fit": np.abs(z_meas - z_predicted_fit),
+        "abs_diff_true_fit_vs_predicted_fit": np.abs(z_true_fit - z_predicted_fit),
+    }
+
+    if signal_layout == "frequency_imag_real":
+        detail_data.update(
+            {
+                "raw_signal_frequency_hz": original_signal[:, 0],
+                "raw_signal_imag": original_signal[:, 1],
+                "raw_signal_real": original_signal[:, 2],
+            }
+        )
+    else:
+        detail_data.update(
+            {
+                "raw_signal_imag": original_signal[:, 0],
+                "raw_signal_phase_deg": original_signal[:, 1],
+                "raw_signal_magnitude": original_signal[:, 2],
+            }
+        )
+
+    return pd.DataFrame(detail_data)
 
 
 def save_reconstruction_plot(plot_path, freq_hz, z_meas, z_true_fit, z_predicted_fit, title):
@@ -475,6 +510,7 @@ def analyze_misclassified_samples(
     trial_num=3,
     method="LSQ",
     save_plots=False,
+    signal_layout="imag_phase_mag",
 ):
     output_dir = Path(output_dir)
     details_dir = output_dir / "reconstructed_eis"
@@ -503,12 +539,14 @@ def analyze_misclassified_samples(
             "predicted_probability_of_true_label": float(row["predicted_probability_of_true_label"]),
             "predicted_probability_of_predicted_label": float(row["predicted_probability_of_predicted_label"]),
             "neglectable_rmse_threshold": float(rmse_threshold),
+            "neglectable_rmse_threshold_type": "pointwise_relative",
+            "signal_layout": signal_layout,
             "fit_trial_num": int(trial_num),
             "fit_method": method,
         }
 
         original_signal = original_signals[row_pos]
-        z_meas = reconstruct_impedance_from_signal(original_signal)
+        z_meas = reconstruct_impedance_from_signal(original_signal, signal_layout=signal_layout)
 
         try:
             true_fit = fit_ecm(z_meas, angular_freq, true_ecm, trial_num=trial_num, method=method)
@@ -524,7 +562,8 @@ def analyze_misclassified_samples(
             metrics_measured_predicted = difference_metrics(z_meas, predicted_fit["z_fit"])
             metrics_true_predicted = difference_metrics(true_fit["z_fit"], predicted_fit["z_fit"])
             rmse_between_reconstructions = metrics_true_predicted["rmse_complex"]
-            is_neglectable = rmse_between_reconstructions <= rmse_threshold
+            relative_rmse_between_reconstructions = metrics_true_predicted["relative_rmse_complex"]
+            is_neglectable = relative_rmse_between_reconstructions <= rmse_threshold
 
             detail_path = details_dir / f"{sample_stub}.csv"
             detail_df = build_detail_dataframe(
@@ -534,6 +573,7 @@ def analyze_misclassified_samples(
                 z_meas,
                 true_fit["z_fit"],
                 predicted_fit["z_fit"],
+                signal_layout=signal_layout,
             )
             detail_df.to_csv(detail_path, index=False)
 
@@ -548,8 +588,8 @@ def analyze_misclassified_samples(
                     predicted_fit["z_fit"],
                     (
                         f"{sample_stub}\n"
-                        f"RMSE(true ECM reconstruction, predicted ECM reconstruction)="
-                        f"{rmse_between_reconstructions:.4e}"
+                        f"relative RMSE(true ECM reconstruction, predicted ECM reconstruction)="
+                        f"{relative_rmse_between_reconstructions:.4e}"
                     ),
                 )
 
@@ -565,6 +605,9 @@ def analyze_misclassified_samples(
                 "rmse_measured_vs_true_fit": metrics_measured_true["rmse_complex"],
                 "rmse_measured_vs_predicted_fit": metrics_measured_predicted["rmse_complex"],
                 "rmse_true_fit_vs_predicted_fit": rmse_between_reconstructions,
+                "relative_rmse_measured_vs_true_fit": metrics_measured_true["relative_rmse_complex"],
+                "relative_rmse_measured_vs_predicted_fit": metrics_measured_predicted["relative_rmse_complex"],
+                "relative_rmse_true_fit_vs_predicted_fit": relative_rmse_between_reconstructions,
                 "mae_true_fit_vs_predicted_fit": metrics_true_predicted["mae_complex"],
                 "max_abs_true_fit_vs_predicted_fit": metrics_true_predicted["max_abs_complex"],
                 "mape_mag_measured_vs_true_fit": metrics_measured_true["mape_magnitude"],
@@ -587,6 +630,9 @@ def analyze_misclassified_samples(
                 "rmse_measured_vs_true_fit": np.nan,
                 "rmse_measured_vs_predicted_fit": np.nan,
                 "rmse_true_fit_vs_predicted_fit": np.nan,
+                "relative_rmse_measured_vs_true_fit": np.nan,
+                "relative_rmse_measured_vs_predicted_fit": np.nan,
+                "relative_rmse_true_fit_vs_predicted_fit": np.nan,
                 "mae_true_fit_vs_predicted_fit": np.nan,
                 "max_abs_true_fit_vs_predicted_fit": np.nan,
                 "mape_mag_measured_vs_true_fit": np.nan,

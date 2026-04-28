@@ -853,9 +853,11 @@ param_dict={"Circuit0_param":Circuit0_param,"Circuit1_param":Circuit1_param,
 ##### Data Export #####
 def arrange_data(Circuit,cir_class,size_number,number_of_point):
     label = cir_class
+    freq = angular_frequency / (2 * np.pi)
     imge = Circuit.imag
-    phase = np.degrees(np.arctan(Circuit.imag/Circuit.real))
-    mag = np.absolute(Circuit)
+    real = Circuit.real
+    # phase = np.degrees(np.arctan(Circuit.imag/Circuit.real))
+    # mag = np.absolute(Circuit)
 
     x= np.zeros((size_number,3,number_of_point))
     y= np.zeros(size_number)
@@ -863,9 +865,9 @@ def arrange_data(Circuit,cir_class,size_number,number_of_point):
     for idx in range(size_number):
             y[idx] = cir_class
             for idx2 in range(number_of_point): 
-                x[idx][0][idx2] = imge[idx][idx2]
-                x[idx][1][idx2] = phase[idx][idx2]
-                x[idx][2][idx2] = mag[idx][idx2]
+                x[idx][0][idx2] = freq[idx2]
+                x[idx][1][idx2] = imge[idx][idx2]
+                x[idx][2][idx2] = real[idx][idx2]
 
     return x,y
 

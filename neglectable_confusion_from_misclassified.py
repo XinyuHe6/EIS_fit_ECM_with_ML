@@ -1,4 +1,5 @@
 import argparse
+import os
 import re
 from pathlib import Path
 
@@ -14,6 +15,10 @@ from ecm_neglectable_analysis import analyze_misclassified_samples, load_frequen
 
 
 LABEL_NAMES = np.array(["C1", "C2", "C3", "C4", "C5", "C6"])
+FEATURE_NAMES_BY_LAYOUT = {
+    "frequency_imag_real": ("freq", "imag", "real"),
+    "imag_phase_mag": ("imag", "phase", "mag"),
+}
 
 
 def parse_args():
@@ -37,7 +42,7 @@ def parse_args():
         "--rmse-threshold",
         type=float,
         default=1e-3,
-        help="RMSE threshold for treating true/predicted reconstructed EIS as neglectable.",
+        help="Pointwise relative RMSE threshold for treating true/predicted reconstructed EIS as neglectable.",
     )
     parser.add_argument(
         "--fit-trials",
@@ -73,12 +78,19 @@ def parse_args():
         action="store_true",
         help="Also save one reconstructed EIS plot per misclassified sample.",
     )
+    parser.add_argument(
+        "--signal-layout",
+        choices=sorted(FEATURE_NAMES_BY_LAYOUT),
+        default=os.getenv("EIS_INPUT_SIGNAL_LAYOUT", "frequency_imag_real"),
+        help="Layout of the 3 raw EIS columns in the misclassified CSV.",
+    )
     return parser.parse_args()
 
 
-def collect_point_columns(df):
-    pattern = re.compile(r"^(imag|phase|mag)_pt_(\d+)$")
-    columns_by_signal = {"imag": {}, "phase": {}, "mag": {}}
+def collect_point_columns(df, signal_layout):
+    signal_names = FEATURE_NAMES_BY_LAYOUT[signal_layout]
+    pattern = re.compile(r"^(" + "|".join(signal_names) + r")_pt_(\d+)$")
+    columns_by_signal = {signal_name: {} for signal_name in signal_names}
 
     for column in df.columns:
         match = pattern.match(column)
@@ -86,19 +98,21 @@ def collect_point_columns(df):
             signal_name, point_text = match.groups()
             columns_by_signal[signal_name][int(point_text)] = column
 
-    common_points = set(columns_by_signal["imag"])
-    common_points &= set(columns_by_signal["phase"])
-    common_points &= set(columns_by_signal["mag"])
+    common_points = set(columns_by_signal[signal_names[0]])
+    for signal_name in signal_names[1:]:
+        common_points &= set(columns_by_signal[signal_name])
     point_numbers = sorted(common_points)
 
     if not point_numbers:
         raise ValueError(
-            "No complete imag_pt_XX / phase_pt_XX / mag_pt_XX columns found in the CSV."
+            "No complete "
+            + " / ".join(f"{signal_name}_pt_XX" for signal_name in signal_names)
+            + " columns found in the CSV."
         )
 
     missing = []
     for point_number in range(point_numbers[0], point_numbers[-1] + 1):
-        for signal_name in ("imag", "phase", "mag"):
+        for signal_name in signal_names:
             if point_number not in columns_by_signal[signal_name]:
                 missing.append(f"{signal_name}_pt_{point_number:02d}")
     if missing:
@@ -107,14 +121,16 @@ def collect_point_columns(df):
     return point_numbers, columns_by_signal
 
 
-def load_original_signals(df):
-    point_numbers, columns_by_signal = collect_point_columns(df)
+def load_original_signals(df, signal_layout):
+    point_numbers, columns_by_signal = collect_point_columns(df, signal_layout)
+    signal_names = FEATURE_NAMES_BY_LAYOUT[signal_layout]
     original_signals = np.empty((len(df), len(point_numbers), 3), dtype=float)
 
     for point_idx, point_number in enumerate(point_numbers):
-        original_signals[:, point_idx, 0] = df[columns_by_signal["imag"][point_number]].astype(float)
-        original_signals[:, point_idx, 1] = df[columns_by_signal["phase"][point_number]].astype(float)
-        original_signals[:, point_idx, 2] = df[columns_by_signal["mag"][point_number]].astype(float)
+        for signal_idx, signal_name in enumerate(signal_names):
+            original_signals[:, point_idx, signal_idx] = df[
+                columns_by_signal[signal_name][point_number]
+            ].astype(float)
 
     return original_signals
 
@@ -218,7 +234,7 @@ def main():
 
     misclassified_df = pd.read_csv(misclassified_csv)
     validate_input_columns(misclassified_df)
-    original_signals = load_original_signals(misclassified_df)
+    original_signals = load_original_signals(misclassified_df, args.signal_layout)
 
     angular_freq, freq_hz = load_frequency_grid(
         original_signals.shape[1],
@@ -237,6 +253,7 @@ def main():
         trial_num=args.fit_trials,
         method=args.fit_method,
         save_plots=args.save_reconstruction_plots,
+        signal_layout=args.signal_layout,
     )
 
     misclassified_matrix, neglectable_matrix = build_confusion_matrices(summary_df)
@@ -257,7 +274,7 @@ def main():
         (
             "Misclassification count with neglectable count\n"
             f"Total={total_misclassified}, Neglectable={total_neglectable}, "
-            f"RMSE threshold={args.rmse_threshold}"
+            f"relative RMSE threshold={args.rmse_threshold}"
         ),
     )
 
@@ -268,6 +285,8 @@ def main():
                 "total_misclassified": total_misclassified,
                 "total_neglectable_misclassification": total_neglectable,
                 "rmse_threshold": float(args.rmse_threshold),
+                "rmse_threshold_type": "pointwise_relative",
+                "signal_layout": args.signal_layout,
                 "fit_trials": int(args.fit_trials),
                 "fit_method": args.fit_method,
                 "output_dir": str(output_dir),
